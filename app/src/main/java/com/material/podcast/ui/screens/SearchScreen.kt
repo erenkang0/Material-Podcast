@@ -22,6 +22,22 @@ import androidx.compose.ui.unit.dp
 import com.material.podcast.data.MockData
 import com.material.podcast.ui.theme.*
 
+@Composable
+private fun CategoryPill(label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.2f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
+    }
+}
+
 private val categoryColors = listOf(
     listOf(Color(0xFF7C4DFF), Color(0xFFE040FB)),
     listOf(Color(0xFFE040FB), Color(0xFFFF6B6B)),
