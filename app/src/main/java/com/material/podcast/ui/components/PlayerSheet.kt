@@ -2,6 +2,7 @@
 
 package com.material.podcast.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -11,36 +12,36 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Replay10
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -49,6 +50,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,13 +63,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.material.podcast.ui.LocalPlayer
@@ -77,10 +80,8 @@ import kotlin.math.abs
 private val BarSpring = spring<Float>(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow)
 private val ArtSpring = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
 
-/**
- * Mini player strip with horizontal swipe-to-skip physics and spring snap-back.
- * Swipe left → next · Swipe right → previous. Haptic fires on commit.
- */
+private enum class DragDir { Unknown, Horizontal, Vertical }
+
 @Composable
 fun NowPlayingBar(
     onExpand: () -> Unit,
@@ -93,9 +94,9 @@ fun NowPlayingBar(
     val scope = rememberCoroutineScope()
 
     val commitThresholdPx = with(density) { 96.dp.toPx() }
+    val verticalThresholdPx = with(density) { 56.dp.toPx() }
     val offsetAnim = remember { Animatable(0f) }
 
-    // Subtle scale-down on press (handled via inner Surface click)
     val pressedScale by animateFloatAsState(
         targetValue = if (abs(offsetAnim.value) > 8f) 0.975f else 1f,
         animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
@@ -117,32 +118,52 @@ fun NowPlayingBar(
                 scaleY = pressedScale
             }
             .pointerInput(Unit) {
-                detectHorizontalDragGestures(
+                var direction = DragDir.Unknown
+                var accX = 0f
+                var accY = 0f
+                detectDragGestures(
+                    onDragStart = { _: Offset ->
+                        direction = DragDir.Unknown
+                        accX = 0f
+                        accY = 0f
+                    },
+                    onDrag = { change: PointerInputChange, dragAmount: Offset ->
+                        change.consume()
+                        accX += dragAmount.x
+                        accY += dragAmount.y
+                        if (direction == DragDir.Unknown && (abs(accX) > 8f || abs(accY) > 8f)) {
+                            direction = if (abs(accX) >= abs(accY)) DragDir.Horizontal else DragDir.Vertical
+                        }
+                        if (direction == DragDir.Horizontal) {
+                            scope.launch {
+                                val current = offsetAnim.value
+                                val resistance = if (abs(current) < commitThresholdPx) 1f else 0.35f
+                                offsetAnim.snapTo(current + dragAmount.x * resistance)
+                            }
+                        }
+                    },
                     onDragEnd = {
-                        val offset = offsetAnim.value
-                        if (abs(offset) >= commitThresholdPx) {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (offset < 0) player.skipToNext() else player.skipToPrevious()
+                        when {
+                            direction == DragDir.Vertical && accY < -verticalThresholdPx -> onExpand()
+                            direction == DragDir.Horizontal -> {
+                                val offset = offsetAnim.value
+                                if (abs(offset) >= commitThresholdPx) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (offset < 0) player.skipToNext() else player.skipToPrevious()
+                                }
+                            }
                         }
                         scope.launch { offsetAnim.animateTo(0f, BarSpring) }
                     },
-                    onDragCancel = {
-                        scope.launch { offsetAnim.animateTo(0f, BarSpring) }
-                    },
-                    onHorizontalDrag = { _, delta ->
-                        scope.launch {
-                            // Elastic resistance: full speed up to threshold, dampened beyond
-                            val current = offsetAnim.value
-                            val resistance = if (abs(current) < commitThresholdPx) 1f else 0.35f
-                            offsetAnim.snapTo(current + delta * resistance)
-                        }
-                    },
+                    onDragCancel = { scope.launch { offsetAnim.animateTo(0f, BarSpring) } },
                 )
             },
     ) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 PodcastArtwork(
@@ -178,7 +199,10 @@ fun NowPlayingBar(
                     EqualizerBars(
                         active = player.isPlaying,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 6.dp).height(18.dp).width(20.dp),
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .height(18.dp)
+                            .width(20.dp),
                     )
                     FilledIconButton(onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -192,21 +216,20 @@ fun NowPlayingBar(
                 progress = { player.progress },
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(3.dp).clip(CircleShape),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .height(3.dp)
+                    .clip(CircleShape),
             )
         }
     }
 }
 
-/**
- * Full-screen player as a ModalBottomSheet.
- * Material 3's sheet uses AnchoredDraggable internally — spring physics included.
- * Features: breathing artwork, haptic seek ticks, speed picker.
- */
 @Composable
 fun FullPlayerSheet(onDismiss: () -> Unit) {
     val player = LocalPlayer.current
-    val episode = player.nowPlaying ?: return
+    player.nowPlaying ?: return
     val haptics = LocalHapticFeedback.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -215,29 +238,32 @@ fun FullPlayerSheet(onDismiss: () -> Unit) {
         sheetState = sheetState,
         dragHandle = {
             Box(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
                     modifier = Modifier
-                        .width(36.dp).height(4.dp)
+                        .width(36.dp)
+                        .height(4.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)),
                 )
             }
         },
     ) {
-        FullPlayerContent(episode = episode, haptics = haptics, player = player)
+        FullPlayerContent(haptics = haptics, player = player)
     }
 }
 
 @Composable
 private fun FullPlayerContent(
-    episode: com.material.podcast.data.model.PodcastEpisode,
     haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
     player: com.material.podcast.ui.viewmodel.PlayerViewModel,
 ) {
-    // Breathing artwork animation
+    val episode = player.nowPlaying ?: return
+
     val infinite = rememberInfiniteTransition(label = "artBreath")
     val breathScale by infinite.animateFloat(
         initialValue = 1f,
@@ -251,12 +277,10 @@ private fun FullPlayerContent(
         label = "artScale",
     )
 
-    // Seek scrubbing
     var dragging by remember { mutableStateOf(false) }
     var scrubValue by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val sliderValue = if (dragging) scrubValue else player.progress
 
-    // Haptic ticks on seek: fires every ~5% of duration
     var lastTick by remember { mutableIntStateOf(-1) }
     LaunchedEffect(sliderValue, dragging) {
         if (dragging) {
@@ -271,28 +295,27 @@ private fun FullPlayerContent(
     }
 
     var liked by remember { mutableStateOf(false) }
-    var showSpeedMenu by remember { mutableStateOf(false) }
+    var showSleepTimer by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 28.dp),
+            .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Artwork with breathing scale
         PodcastArtwork(
             imageUrl = episode.artworkUrl,
             shape = MaterialTheme.shapes.extraLarge,
             modifier = Modifier
-                .fillMaxWidth(0.82f)
+                .fillMaxWidth(0.78f)
                 .aspectRatio(1f)
                 .graphicsLayer { scaleX = artScale; scaleY = artScale },
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
 
-        // Episode info
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -319,14 +342,14 @@ private fun FullPlayerContent(
                 Icon(
                     if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     "Beğen",
-                    tint = if (liked) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (liked) MaterialTheme.colorScheme.tertiary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
-        // Seek bar
         Slider(
             value = sliderValue,
             onValueChange = { dragging = true; scrubValue = it },
@@ -348,9 +371,8 @@ private fun FullPlayerContent(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // Main playback controls
         PlaybackControls(
             isPlaying = player.isPlaying,
             isBuffering = player.isBuffering,
@@ -370,7 +392,163 @@ private fun FullPlayerContent(
             onSeekForward = { player.seekBy(30_000L) },
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(4.dp))
+
+        // Speed slider — always visible above button row
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "0.5×",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Hız: ${"%.2f".format(player.playbackSpeed)}×",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "2×",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Slider(
+                value = player.playbackSpeed,
+                onValueChange = { player.setSpeed(it) },
+                onValueChangeFinished = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
+                valueRange = 0.5f..2.0f,
+                steps = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        // Queue panel — expands above secondary controls
+        AnimatedVisibility(
+            visible = showQueue,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Son çalınanlar",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    TextButton(onClick = { showQueue = false }) { Text("Kapat") }
+                }
+                if (player.history.isEmpty()) {
+                    Text(
+                        "Sıra boş",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 180.dp)) {
+                        items(player.history, key = { it.guid }) { ep ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                PodcastArtwork(
+                                    imageUrl = ep.artworkUrl,
+                                    shape = MaterialTheme.shapes.small,
+                                    modifier = Modifier.size(38.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        ep.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        ep.podcastTitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                if (ep.guid == player.nowPlaying?.guid) {
+                                    Icon(
+                                        Icons.Rounded.QueueMusic,
+                                        "Şu an çalıyor",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+
+        // Sleep timer panel — expands above secondary controls
+        AnimatedVisibility(
+            visible = showSleepTimer,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (player.sleepTimerMs > 0) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Kalan: ${formatTimeSec((player.sleepTimerMs / 1000).toInt())}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        TextButton(onClick = { player.cancelSleepTimer(); showSleepTimer = false }) {
+                            Text("İptal")
+                        }
+                    }
+                } else {
+                    Text(
+                        "Uyku zamanlayıcı",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf(10, 15, 30, 45, 60).forEach { minutes ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    player.setSleepTimer(minutes)
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    showSleepTimer = false
+                                },
+                                label = { Text("$minutes dk") },
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+        }
 
         // Secondary controls row
         Row(
@@ -378,45 +556,32 @@ private fun FullPlayerContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box {
-                IconButton(onClick = { showSpeedMenu = true }) {
-                    Icon(
-                        Icons.Rounded.Speed, "Hız",
-                        tint = if (player.playbackSpeed != 1f) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
-                    listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "${speed}×",
-                                    fontWeight = if (speed == player.playbackSpeed) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (speed == player.playbackSpeed) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurface,
-                                )
-                            },
-                            onClick = {
-                                player.setSpeed(speed)
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                showSpeedMenu = false
-                            },
-                        )
-                    }
-                }
+            IconButton(onClick = {
+                showSleepTimer = !showSleepTimer
+                if (showSleepTimer) showQueue = false
+            }) {
+                Icon(
+                    Icons.Rounded.Timer,
+                    "Uyku zamanlayıcı",
+                    tint = if (player.sleepTimerMs > 0 || showSleepTimer)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            IconButton(onClick = { }) {
-                Icon(Icons.Rounded.Timer, "Uyku zamanlayıcı",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = { }) {
-                Icon(Icons.Rounded.QueueMusic, "Sıra",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(onClick = {
+                showQueue = !showQueue
+                if (showQueue) showSleepTimer = false
+            }) {
+                Icon(
+                    Icons.Rounded.QueueMusic,
+                    "Sıra",
+                    tint = if (showQueue) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
     }
 }
 
