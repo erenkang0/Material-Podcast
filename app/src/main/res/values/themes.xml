@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MaterialPodcast" parent="android:Theme.Material.NoTitleBar" />
+    <!--
+      Minimal launch theme. All real theming is done in Compose (MaterialTheme / EchoesTheme),
+      and edge-to-edge with adaptive system-bar icon colors is handled there. This base only
+      needs to be an action-bar-less, translucent-bars host.
+    -->
+    <style name="Theme.MaterialPodcast" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
 </resources>

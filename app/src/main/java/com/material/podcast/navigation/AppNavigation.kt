@@ -1,80 +1,112 @@
 package com.material.podcast.navigation
 
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.material.podcast.ui.screens.HomeScreen
 import com.material.podcast.ui.screens.LibraryScreen
 import com.material.podcast.ui.screens.PlayerScreen
 import com.material.podcast.ui.screens.SearchScreen
+import com.material.podcast.ui.screens.ShowDetailsScreen
 
 sealed class Screen(val route: String) {
-    object Home : Screen("home")
-    object Player : Screen("player")
-    object Search : Screen("search")
-    object Library : Screen("library")
+    data object Home : Screen("home")
+    data object Search : Screen("search")
+    data object Library : Screen("library")
+    data object Player : Screen("player")
+    data object ShowDetails : Screen("show/{showId}") {
+        fun create(showId: Int) = "show/$showId"
+    }
 }
 
+private val SlideSpring = spring<androidx.compose.ui.unit.IntOffset>(
+    dampingRatio = 0.9f,
+    stiffness = Spring.StiffnessMediumLow,
+)
+
 @Composable
-fun AppNavHost(navController: NavHostController) {
+fun AppNavHost(
+    navController: NavHostController,
+    onOpenThemes: () -> Unit,
+    onSelectTab: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
+        modifier = modifier,
+        // Default = fade-through, used when switching the bottom-nav tabs.
         enterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { it / 3 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+            fadeIn(tween(220, delayMillis = 80)) + scaleIn(
+                initialScale = 0.94f,
+                animationSpec = tween(220, delayMillis = 80),
+            )
         },
-        exitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { -it / 3 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-        },
+        exitTransition = { fadeOut(tween(110)) },
         popEnterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { -it / 3 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+            fadeIn(tween(220, delayMillis = 80)) + scaleIn(
+                initialScale = 0.94f,
+                animationSpec = tween(220, delayMillis = 80),
+            )
         },
-        popExitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { it / 3 },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-        }
+        popExitTransition = { fadeOut(tween(110)) },
     ) {
         composable(Screen.Home.route) {
-            HomeScreen(onNavigateToPlayer = { navController.navigate(Screen.Player.route) })
+            HomeScreen(
+                onOpenShow = { navController.navigate(Screen.ShowDetails.create(it)) },
+                onOpenThemes = onOpenThemes,
+            )
         }
-        composable(Screen.Player.route) {
-            PlayerScreen(onNavigateBack = { navController.popBackStack() })
-        }
+
         composable(Screen.Search.route) {
-            SearchScreen()
+            SearchScreen(
+                onOpenShow = { navController.navigate(Screen.ShowDetails.create(it)) },
+            )
         }
+
         composable(Screen.Library.route) {
-            LibraryScreen(onNavigateToPlayer = { navController.navigate(Screen.Player.route) })
+            LibraryScreen(
+                onOpenShow = { navController.navigate(Screen.ShowDetails.create(it)) },
+                onOpenPlayer = { navController.navigate(Screen.Player.route) },
+                onOpenSearch = { onSelectTab(Screen.Search.route) },
+                onOpenThemes = onOpenThemes,
+            )
+        }
+
+        composable(
+            route = Screen.ShowDetails.route,
+            arguments = listOf(navArgument("showId") { type = NavType.IntType }),
+            enterTransition = { slideInHorizontally(SlideSpring) { it } + fadeIn(tween(250)) },
+            popExitTransition = { slideOutHorizontally(SlideSpring) { it } + fadeOut(tween(250)) },
+        ) { backStackEntry ->
+            val showId = backStackEntry.arguments?.getInt("showId") ?: 0
+            ShowDetailsScreen(
+                showId = showId,
+                onBack = { navController.popBackStack() },
+                onOpenPlayer = { navController.navigate(Screen.Player.route) },
+            )
+        }
+
+        composable(
+            route = Screen.Player.route,
+            enterTransition = { slideInVertically(SlideSpring) { it } + fadeIn(tween(250)) },
+            popExitTransition = { slideOutVertically(SlideSpring) { it } + fadeOut(tween(250)) },
+        ) {
+            PlayerScreen(onBack = { navController.popBackStack() })
         }
     }
 }
