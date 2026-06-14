@@ -2,6 +2,14 @@
 
 ## v0.2-beta — 2026-06-14
 
+### Settings screen (new)
+- **Ayarlar / Settings** — 4th nav tab with full settings screen.
+- **Language toggle** — English / Türkçe. Tap to switch; app restarts with
+  the new locale applied system-wide via `attachBaseContext`.
+- **Color theme** shortcut — opens the existing theme picker sheet.
+- **Default playback speed** — choose from 0.75× to 2×, persisted across sessions.
+- **About** section with version number and open-source attribution.
+
 ### Now Playing — physics-grade redesign
 - **NowPlayingBar** — mini player strip with horizontal swipe-to-skip.
   Swipe left → next, swipe right → previous.  

@@ -19,12 +19,14 @@ import androidx.navigation.navArgument
 import com.material.podcast.ui.screens.HomeScreen
 import com.material.podcast.ui.screens.LibraryScreen
 import com.material.podcast.ui.screens.SearchScreen
+import com.material.podcast.ui.screens.SettingsScreen
 import com.material.podcast.ui.screens.ShowDetailsScreen
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Search : Screen("search")
     data object Library : Screen("library")
+    data object Settings : Screen("settings")
     data object ShowDetails : Screen("show/{podcastId}") {
         fun create(id: String) = "show/${id}"
     }
@@ -71,6 +73,10 @@ fun AppNavHost(
                 onOpenSearch = { onSelectTab(Screen.Search.route) },
                 onOpenThemes = onOpenThemes,
             )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(onOpenThemes = onOpenThemes)
         }
 
         composable(

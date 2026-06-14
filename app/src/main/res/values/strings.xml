@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Echoes</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Explore</string>
+    <string name="nav_library">Library</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_color_theme">Color Theme</string>
+    <string name="settings_color_theme_sub">Choose your palette</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_playback">Playback</string>
+    <string name="settings_default_speed">Default Playback Speed</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_open_source">Open Source</string>
+    <string name="settings_open_source_sub">Built with Kotlin · Jetpack Compose · Material 3</string>
+    <string name="settings_made_with">Made with Claude · Anthropic</string>
+
+    <!-- Language options -->
+    <string name="lang_english">English</string>
+    <string name="lang_turkish">Türkçe</string>
 </resources>

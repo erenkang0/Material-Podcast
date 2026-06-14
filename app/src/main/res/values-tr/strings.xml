@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Echoes</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Ana Sayfa</string>
+    <string name="nav_search">Keşfet</string>
+    <string name="nav_library">Kitaplık</string>
+    <string name="nav_settings">Ayarlar</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Ayarlar</string>
+    <string name="settings_appearance">Görünüm</string>
+    <string name="settings_color_theme">Renk Teması</string>
+    <string name="settings_color_theme_sub">Palet seçin</string>
+    <string name="settings_language">Dil</string>
+    <string name="settings_playback">Oynatma</string>
+    <string name="settings_default_speed">Varsayılan Oynatma Hızı</string>
+    <string name="settings_about">Hakkında</string>
+    <string name="settings_version">Sürüm</string>
+    <string name="settings_open_source">Açık Kaynak</string>
+    <string name="settings_open_source_sub">Kotlin · Jetpack Compose · Material 3 ile yapıldı</string>
+    <string name="settings_made_with">Claude · Anthropic ile geliştirildi</string>
+
+    <!-- Language options -->
+    <string name="lang_english">İngilizce</string>
+    <string name="lang_turkish">Türkçe</string>
+</resources>

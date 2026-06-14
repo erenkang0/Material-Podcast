@@ -1,9 +1,13 @@
 package com.material.podcast
 
+import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.material.podcast.data.store.SettingsStore
+import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,6 +36,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.material.podcast.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -52,6 +59,16 @@ import com.material.podcast.ui.theme.rememberThemeController
 import com.material.podcast.ui.viewmodel.PlayerViewModel
 
 class MainActivity : ComponentActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        val lang = SettingsStore.getLanguage(newBase)
+        val locale = Locale(lang)
+        Locale.setDefault(locale)
+        val config = Configuration(newBase.resources.configuration)
+        config.setLocale(locale)
+        super.attachBaseContext(newBase.createConfigurationContext(config))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -81,9 +98,10 @@ private fun PodcastApp(themeController: ThemeController) {
     var showThemeSheet by remember { mutableStateOf(false) }
 
     val navItems = listOf(
-        NavItem(Screen.Home.route, "Ana Sayfa", Icons.Rounded.Home),
-        NavItem(Screen.Search.route, "Keşfet", Icons.Rounded.Search),
-        NavItem(Screen.Library.route, "Kitaplık", Icons.Rounded.LibraryMusic),
+        NavItem(Screen.Home.route, stringResource(R.string.nav_home), Icons.Rounded.Home),
+        NavItem(Screen.Search.route, stringResource(R.string.nav_search), Icons.Rounded.Search),
+        NavItem(Screen.Library.route, stringResource(R.string.nav_library), Icons.Rounded.LibraryMusic),
+        NavItem(Screen.Settings.route, stringResource(R.string.nav_settings), Icons.Rounded.Settings),
     )
     val bottomBarRoutes = navItems.map { it.route }.toSet()
     val showBottomBar = currentRoute in bottomBarRoutes

@@ -12,8 +12,8 @@ android {
         applicationId = "com.material.podcast"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1-beta"
+        versionCode = 2
+        versionName = "0.2-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -39,6 +39,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
