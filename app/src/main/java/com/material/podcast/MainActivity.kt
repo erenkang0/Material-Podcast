@@ -26,6 +26,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,18 +35,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.material.podcast.navigation.AppNavHost
 import com.material.podcast.navigation.Screen
+import com.material.podcast.ui.LocalPlayer
 import com.material.podcast.ui.components.MiniPlayer
 import com.material.podcast.ui.components.ThemePickerSheet
-import com.material.podcast.ui.state.PlayerState
 import com.material.podcast.ui.theme.EchoesTheme
 import com.material.podcast.ui.theme.ThemeController
 import com.material.podcast.ui.theme.rememberThemeController
+import com.material.podcast.ui.viewmodel.PlayerViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,34 +56,33 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val themeController = rememberThemeController()
+            val playerVm: PlayerViewModel = viewModel()
             EchoesTheme(controller = themeController) {
-                PodcastApp(themeController = themeController)
+                CompositionLocalProvider(LocalPlayer provides playerVm) {
+                    PodcastApp(
+                        themeController = themeController,
+                    )
+                }
             }
         }
     }
 }
 
-private data class NavItem(
-    val route: String,
-    val label: String,
-    val icon: ImageVector,
-)
+private data class NavItem(val route: String, val label: String, val icon: ImageVector)
 
 @Composable
-private fun PodcastApp(
-    themeController: ThemeController,
-) {
+private fun PodcastApp(themeController: ThemeController) {
+    val player = LocalPlayer.current
     val navController = rememberNavController()
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = backStackEntry?.destination
-    val currentRoute = currentDestination?.route
+    val backEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backEntry?.destination?.route
 
     var showThemeSheet by remember { mutableStateOf(false) }
 
     val navItems = listOf(
-        NavItem(Screen.Home.route, "Home", Icons.Rounded.Home),
-        NavItem(Screen.Search.route, "Explore", Icons.Rounded.Search),
-        NavItem(Screen.Library.route, "Library", Icons.Rounded.LibraryMusic),
+        NavItem(Screen.Home.route, "Ana Sayfa", Icons.Rounded.Home),
+        NavItem(Screen.Search.route, "Keşfet", Icons.Rounded.Search),
+        NavItem(Screen.Library.route, "Kitaplık", Icons.Rounded.LibraryMusic),
     )
     val bottomBarRoutes = navItems.map { it.route }.toSet()
     val showBottomBar = currentRoute in bottomBarRoutes
@@ -103,7 +105,7 @@ private fun PodcastApp(
             ) {
                 Column {
                     AnimatedVisibility(
-                        visible = PlayerState.hasStarted,
+                        visible = player.nowPlaying != null,
                         enter = slideInVertically { it } + fadeIn(),
                         exit = slideOutVertically { it } + fadeOut(),
                     ) {
@@ -114,26 +116,20 @@ private fun PodcastApp(
                     }
                     NavigationBar {
                         navItems.forEach { item ->
-                            val selected =
-                                currentDestination?.hierarchy?.any { it.route == item.route } == true
+                            val selected = backEntry?.destination?.hierarchy
+                                ?.any { it.route == item.route } == true
                             val scale by animateFloatAsState(
                                 targetValue = if (selected) 1.12f else 1f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMediumLow,
-                                ),
-                                label = "navIconScale",
+                                animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow),
+                                label = "navScale",
                             )
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = { selectTab(item.route) },
                                 icon = {
                                     Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = item.label,
-                                        modifier = Modifier.graphicsLayer {
-                                            scaleX = scale; scaleY = scale
-                                        },
+                                        item.icon, item.label,
+                                        modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
                                     )
                                 },
                                 label = { Text(item.label) },

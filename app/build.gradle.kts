@@ -50,6 +50,7 @@ android {
 dependencies {
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -59,5 +60,17 @@ dependencies {
     implementation(libs.material.icons.extended)
     implementation(libs.navigation.compose)
     implementation(libs.lifecycle.viewmodel.compose)
+    // Network
+    implementation(libs.retrofit.core)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp.core)
+    implementation(libs.gson)
+    // Images
+    implementation(libs.coil.compose)
+    // Audio
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
+    // Coroutines
+    implementation(libs.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
 }

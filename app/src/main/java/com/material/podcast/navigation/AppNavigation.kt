@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -28,15 +29,12 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Library : Screen("library")
     data object Player : Screen("player")
-    data object ShowDetails : Screen("show/{showId}") {
-        fun create(showId: Int) = "show/$showId"
+    data object ShowDetails : Screen("show/{podcastId}") {
+        fun create(id: String) = "show/${id}"
     }
 }
 
-private val SlideSpring = spring<androidx.compose.ui.unit.IntOffset>(
-    dampingRatio = 0.9f,
-    stiffness = Spring.StiffnessMediumLow,
-)
+private val SlideSpring = spring<IntOffset>(dampingRatio = 0.88f, stiffness = Spring.StiffnessMediumLow)
 
 @Composable
 fun AppNavHost(
@@ -49,19 +47,12 @@ fun AppNavHost(
         navController = navController,
         startDestination = Screen.Home.route,
         modifier = modifier,
-        // Default = fade-through, used when switching the bottom-nav tabs.
         enterTransition = {
-            fadeIn(tween(220, delayMillis = 80)) + scaleIn(
-                initialScale = 0.94f,
-                animationSpec = tween(220, delayMillis = 80),
-            )
+            fadeIn(tween(220, 80)) + scaleIn(initialScale = 0.94f, animationSpec = tween(220, 80))
         },
         exitTransition = { fadeOut(tween(110)) },
         popEnterTransition = {
-            fadeIn(tween(220, delayMillis = 80)) + scaleIn(
-                initialScale = 0.94f,
-                animationSpec = tween(220, delayMillis = 80),
-            )
+            fadeIn(tween(220, 80)) + scaleIn(initialScale = 0.94f, animationSpec = tween(220, 80))
         },
         popExitTransition = { fadeOut(tween(110)) },
     ) {
@@ -89,13 +80,13 @@ fun AppNavHost(
 
         composable(
             route = Screen.ShowDetails.route,
-            arguments = listOf(navArgument("showId") { type = NavType.IntType }),
+            arguments = listOf(navArgument("podcastId") { type = NavType.StringType }),
             enterTransition = { slideInHorizontally(SlideSpring) { it } + fadeIn(tween(250)) },
             popExitTransition = { slideOutHorizontally(SlideSpring) { it } + fadeOut(tween(250)) },
-        ) { backStackEntry ->
-            val showId = backStackEntry.arguments?.getInt("showId") ?: 0
+        ) { entry ->
+            val podcastId = entry.arguments?.getString("podcastId") ?: return@composable
             ShowDetailsScreen(
-                showId = showId,
+                podcastId = podcastId,
                 onBack = { navController.popBackStack() },
                 onOpenPlayer = { navController.navigate(Screen.Player.route) },
             )

@@ -36,14 +36,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
@@ -64,50 +66,74 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.material.podcast.data.Category
-import com.material.podcast.data.Episode
-import com.material.podcast.data.Show
-import com.material.podcast.ui.state.PlayerState
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.material.podcast.data.model.Podcast
+import com.material.podcast.data.model.PodcastEpisode
+import com.material.podcast.ui.LocalPlayer
 
-/** A gentle spring used for press / selection feedback across the app. */
-private val ExpressiveSpring = spring<Float>(
+private val BounceSpring = spring<Float>(
     dampingRatio = Spring.DampingRatioMediumBouncy,
     stiffness = Spring.StiffnessMediumLow,
 )
 
-/**
- * Cover-art stand-in: a rounded [androidx.compose.foundation.layout.Box] filled with a tonal
- * surface and a centered Material icon. No images are ever used — this represents artwork
- * structurally while staying fully on-theme.
- */
+/** Shows a real network image; falls back to a Material icon if url is blank. */
+@Composable
+fun PodcastArtwork(
+    imageUrl: String,
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.medium,
+    fallbackIcon: ImageVector = Icons.Rounded.Podcasts,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    iconBg: Color = MaterialTheme.colorScheme.surfaceVariant,
+) {
+    if (imageUrl.isNotBlank()) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(imageUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.clip(shape),
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(iconBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(fallbackIcon, contentDescription = null, tint = iconTint)
+        }
+    }
+}
+
+/** Legacy icon-only cover art used where we don't have a URL. */
 @Composable
 fun CoverArt(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium,
+    shape: Shape = MaterialTheme.shapes.medium,
     container: Color = MaterialTheme.colorScheme.surfaceVariant,
     content: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     iconFraction: Float = 0.42f,
 ) {
     BoxWithConstraints(
-        modifier = modifier
-            .clip(shape)
-            .background(container),
+        modifier = modifier.clip(shape).background(container),
         contentAlignment = Alignment.Center,
     ) {
-        val iconSize = (if (maxWidth < maxHeight) maxWidth else maxHeight) * iconFraction
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = content,
-            modifier = Modifier.size(iconSize),
-        )
+        val sz = (if (maxWidth < maxHeight) maxWidth else maxHeight) * iconFraction
+        Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(sz))
     }
 }
 
@@ -119,23 +145,16 @@ fun SectionHeader(
     onAction: (() -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
         if (actionLabel != null && onAction != null) {
             TextButton(onClick = onAction) { Text(actionLabel) }
         }
     }
 }
 
-/** Smoothly morphs between play and pause glyphs. */
 @Composable
 fun PlayPauseIcon(
     isPlaying: Boolean,
@@ -158,87 +177,56 @@ fun PlayPauseIcon(
     }
 }
 
-/** Three little bars that dance while something is playing. */
 @Composable
-fun EqualizerBars(
-    active: Boolean,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    val transition = rememberInfiniteTransition(label = "equalizer")
-    val a by transition.animateFloat(
-        0.35f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "a"
-    )
-    val b by transition.animateFloat(
-        1f, 0.4f, infiniteRepeatable(tween(560), RepeatMode.Reverse), label = "b"
-    )
-    val c by transition.animateFloat(
-        0.5f, 1f, infiniteRepeatable(tween(340), RepeatMode.Reverse), label = "c"
-    )
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        listOf(a, b, c).forEach { value ->
-            val factor = if (active) value else 0.3f
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .fillMaxHeight(factor)
-                    .clip(CircleShape)
-                    .background(color),
-            )
+fun EqualizerBars(active: Boolean, color: Color, modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "eq")
+    val a by t.animateFloat(0.35f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), "a")
+    val b by t.animateFloat(1f, 0.4f, infiniteRepeatable(tween(560), RepeatMode.Reverse), "b")
+    val c by t.animateFloat(0.5f, 1f, infiniteRepeatable(tween(340), RepeatMode.Reverse), "c")
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
+        listOf(a, b, c).forEach { v ->
+            val f = if (active) v else 0.3f
+            Box(Modifier.width(3.dp).fillMaxHeight(f).clip(CircleShape).background(color))
         }
     }
 }
 
 @Composable
-private fun rememberPressScale(interaction: MutableInteractionSource): Float {
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = ExpressiveSpring,
-        label = "pressScale",
-    )
+private fun rememberPressScale(src: MutableInteractionSource): Float {
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, BounceSpring, label = "press")
     return scale
 }
 
 @Composable
-fun FeaturedCard(
-    show: Show,
+fun PodcastCard(
+    podcast: Podcast,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
+    val src = remember { MutableInteractionSource() }
+    val scale = rememberPressScale(src)
     ElevatedCard(
         onClick = onClick,
-        interactionSource = interaction,
+        interactionSource = src,
         shape = MaterialTheme.shapes.large,
-        modifier = modifier
-            .width(184.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale },
+        modifier = modifier.width(184.dp).graphicsLayer { scaleX = scale; scaleY = scale },
     ) {
         Column(Modifier.padding(12.dp)) {
-            CoverArt(
-                icon = show.icon,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
-                container = MaterialTheme.colorScheme.primaryContainer,
-                content = MaterialTheme.colorScheme.onPrimaryContainer,
-                iconFraction = 0.46f,
+            PodcastArtwork(
+                imageUrl = podcast.artworkUrl,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = show.title,
+                podcast.title,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = show.author,
+                podcast.author,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -249,85 +237,154 @@ fun FeaturedCard(
 }
 
 @Composable
-fun CategoryListItem(
-    category: Category,
+fun PodcastListItem(
+    podcast: Podcast,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ListItem(
         headlineContent = {
-            Text(category.name, style = MaterialTheme.typography.titleMedium)
+            Text(podcast.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
-        supportingContent = { Text(category.supporting) },
+        supportingContent = {
+            Text("${podcast.author} · ${podcast.genre}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
         leadingContent = {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = category.icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        },
-        trailingContent = {
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            PodcastArtwork(
+                imageUrl = podcast.artworkUrl,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.size(56.dp),
             )
         },
+        trailingContent = {
+            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = modifier
-            .clip(MaterialTheme.shapes.large)
-            .clickable(onClick = onClick),
+        modifier = modifier.clip(MaterialTheme.shapes.large).clickable(onClick = onClick),
     )
 }
 
 @Composable
 fun EpisodeListItem(
-    episode: Episode,
+    episode: PodcastEpisode,
     onPlay: () -> Unit,
     modifier: Modifier = Modifier,
+    showProgress: Boolean = false,
+    progressFraction: Float = 0f,
 ) {
+    val player = LocalPlayer.current
+    val isCurrentEpisode = player.nowPlaying?.guid == episode.guid
     Column(modifier) {
         ListItem(
             headlineContent = {
                 Text(
                     episode.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    color = if (isCurrentEpisode) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
                 )
             },
-            supportingContent = { Text("${episode.date} · ${episode.duration}") },
+            supportingContent = {
+                Column {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "${episode.publishedDate} · ${episode.durationLabel}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (episode.description.isNotBlank()) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            episode.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            },
             leadingContent = {
-                CoverArt(
-                    icon = episode.icon,
-                    modifier = Modifier.size(52.dp),
-                    shape = MaterialTheme.shapes.small,
-                )
+                Box {
+                    PodcastArtwork(
+                        imageUrl = episode.artworkUrl,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.size(56.dp),
+                    )
+                    if (isCurrentEpisode && player.isPlaying) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(MaterialTheme.shapes.small)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            EqualizerBars(
+                                active = true,
+                                color = Color.White,
+                                modifier = Modifier.height(20.dp).width(22.dp),
+                            )
+                        }
+                    }
+                }
             },
             trailingContent = {
                 FilledTonalIconButton(onClick = onPlay) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play episode")
+                    PlayPauseIcon(
+                        isPlaying = isCurrentEpisode && player.isPlaying,
+                        contentDescription = "Play",
+                    )
                 }
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
-        if (episode.progress > 0f) {
+        if (showProgress && progressFraction > 0f) {
             LinearProgressIndicator(
-                progress = { episode.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(4.dp)
-                    .clip(CircleShape),
+                progress = { progressFraction },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
+            )
+        }
+        if (isCurrentEpisode) {
+            LinearProgressIndicator(
+                progress = { player.progress },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.primaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+fun LibraryPodcastCard(
+    podcast: Podcast,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val src = remember { MutableInteractionSource() }
+    val scale = rememberPressScale(src)
+    ElevatedCard(
+        onClick = onClick,
+        interactionSource = src,
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            PodcastArtwork(
+                imageUrl = podcast.artworkUrl,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(podcast.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                podcast.author,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -340,17 +397,13 @@ fun GenreChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1.05f else 1f,
-        animationSpec = ExpressiveSpring,
-        label = "chipScale",
-    )
+    val scale by animateFloatAsState(if (selected) 1.05f else 1f, BounceSpring, label = "chip")
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
         leadingIcon = if (selected) {
-            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            { Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)) }
         } else null,
         shape = MaterialTheme.shapes.small,
         colors = FilterChipDefaults.filterChipColors(),
@@ -359,122 +412,80 @@ fun GenreChip(
 }
 
 @Composable
-fun LibraryShowCard(
-    show: Show,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
-    ElevatedCard(
-        onClick = onClick,
-        interactionSource = interaction,
-        shape = MaterialTheme.shapes.large,
-        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            CoverArt(
-                icon = show.icon,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
-                container = MaterialTheme.colorScheme.tertiaryContainer,
-                content = MaterialTheme.colorScheme.onTertiaryContainer,
-                iconFraction = 0.44f,
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = show.title,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "${show.episodes} episodes",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** Compact, tappable now-playing bar that floats above the navigation bar. */
-@Composable
 fun MiniPlayer(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val player = LocalPlayer.current
+    val episode = player.nowPlaying ?: return
     Surface(
         onClick = onExpand,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
+        shadowElevation = 8.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
         Column {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CoverArt(
-                    icon = Icons.Rounded.Headphones,
-                    modifier = Modifier.size(44.dp),
+                PodcastArtwork(
+                    imageUrl = episode.artworkUrl,
                     shape = MaterialTheme.shapes.small,
-                    container = MaterialTheme.colorScheme.primary,
-                    content = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(46.dp),
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = PlayerState.episodeTitle,
+                        episode.title,
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = PlayerState.showTitle,
+                        episode.podcastTitle,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                EqualizerBars(
-                    active = PlayerState.isPlaying,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                        .height(18.dp)
-                        .width(20.dp),
-                )
-                FilledIconButton(onClick = { PlayerState.togglePlayPause() }) {
-                    PlayPauseIcon(
-                        isPlaying = PlayerState.isPlaying,
-                        contentDescription = if (PlayerState.isPlaying) "Pause" else "Play",
+                if (player.isBuffering) {
+                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                } else {
+                    EqualizerBars(
+                        active = player.isPlaying,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 6.dp).height(18.dp).width(20.dp),
                     )
+                    FilledIconButton(onClick = { player.togglePlayPause() }) {
+                        PlayPauseIcon(player.isPlaying, if (player.isPlaying) "Pause" else "Play")
+                    }
                 }
             }
             LinearProgressIndicator(
-                progress = { PlayerState.progress },
+                progress = { player.progress },
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .height(3.dp)
-                    .clip(CircleShape),
+                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(3.dp).clip(CircleShape),
             )
         }
     }
 }
 
-/** The transport row on the Now Playing screen, with a large springy play/pause button. */
 @Composable
 fun PlaybackControls(
     isPlaying: Boolean,
+    isBuffering: Boolean,
     onToggle: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -483,62 +494,45 @@ fun PlaybackControls(
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.9f else 1f,
-        animationSpec = ExpressiveSpring,
-        label = "playScale",
-    )
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.88f else 1f, BounceSpring, label = "playBtn")
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onSeekBack) {
-            Icon(
-                Icons.Rounded.Replay10,
-                contentDescription = "Rewind 10 seconds",
-                modifier = Modifier.size(28.dp),
-            )
-        }
         IconButton(onClick = onPrevious) {
-            Icon(
-                Icons.Rounded.SkipPrevious,
-                contentDescription = "Previous",
-                modifier = Modifier.size(36.dp),
-            )
+            Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(34.dp))
+        }
+        IconButton(onClick = onSeekBack) {
+            Icon(Icons.Rounded.Replay10, "Rewind 10s", modifier = Modifier.size(32.dp))
         }
         FilledIconButton(
             onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onToggle()
             },
-            interactionSource = interaction,
+            interactionSource = src,
             shape = MaterialTheme.shapes.extraLarge,
-            modifier = Modifier
-                .size(84.dp)
-                .graphicsLayer { scaleX = scale; scaleY = scale },
+            modifier = Modifier.size(80.dp).graphicsLayer { scaleX = scale; scaleY = scale },
         ) {
-            PlayPauseIcon(
-                isPlaying = isPlaying,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                modifier = Modifier.size(40.dp),
-            )
-        }
-        IconButton(onClick = onNext) {
-            Icon(
-                Icons.Rounded.SkipNext,
-                contentDescription = "Next",
-                modifier = Modifier.size(36.dp),
-            )
+            if (isBuffering) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            } else {
+                PlayPauseIcon(isPlaying, if (isPlaying) "Pause" else "Play", Modifier.size(38.dp))
+            }
         }
         IconButton(onClick = onSeekForward) {
-            Icon(
-                Icons.Rounded.Forward10,
-                contentDescription = "Forward 10 seconds",
-                modifier = Modifier.size(28.dp),
-            )
+            Icon(Icons.Rounded.Forward30, "Forward 30s", modifier = Modifier.size(32.dp))
+        }
+        IconButton(onClick = onNext) {
+            Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(34.dp))
         }
     }
 }

@@ -1,10 +1,13 @@
 package com.material.podcast.ui.screens
 
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +30,8 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,50 +47,51 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.material.podcast.data.MockData
-import com.material.podcast.ui.components.CoverArt
+import com.material.podcast.ui.LocalPlayer
 import com.material.podcast.ui.components.PlaybackControls
-import com.material.podcast.ui.state.PlayerState
+import com.material.podcast.ui.components.PodcastArtwork
 
 @Composable
-fun PlayerScreen(
-    onBack: () -> Unit,
-) {
-    val isPlaying = PlayerState.isPlaying
+fun PlayerScreen(onBack: () -> Unit) {
+    val player = LocalPlayer.current
+    val episode = player.nowPlaying
 
-    // Gentle breathing pulse on the artwork while audio is "playing".
-    val infinite = rememberInfiniteTransition(label = "artwork")
+    // Artwork pulse while playing
+    val infinite = rememberInfiniteTransition(label = "art")
     val pulse by infinite.animateFloat(
         initialValue = 1f,
-        targetValue = 1.03f,
-        animationSpec = infiniteRepeatable(tween(2200), RepeatMode.Reverse),
+        targetValue = 1.025f,
+        animationSpec = infiniteRepeatable(tween(2400), RepeatMode.Reverse),
         label = "pulse",
     )
     val artScale by animateFloatAsState(
-        targetValue = if (isPlaying) pulse else 1f,
-        animationSpec = tween(400),
+        targetValue = if (player.isPlaying) pulse else 0.96f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
         label = "artScale",
     )
 
-    // Slider drag state so the thumb stays under the finger while scrubbing.
+    // Scrubbing state
     var dragging by remember { mutableStateOf(false) }
-    var scrubValue by remember { mutableFloatStateOf(PlayerState.progress) }
-    val sliderValue = if (dragging) scrubValue else PlayerState.progress
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+    val sliderValue = if (dragging) scrubValue else player.progress
 
     var liked by remember { mutableStateOf(false) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
             .pointerInput(Unit) {
-                var accumulated = 0f
+                var acc = 0f
                 detectVerticalDragGestures(
-                    onDragStart = { accumulated = 0f },
-                    onDragEnd = { if (accumulated > 180f) onBack() },
-                ) { _, dragAmount -> accumulated += dragAmount }
+                    onDragStart = { acc = 0f },
+                    onDragEnd = { if (acc > 160f) onBack() },
+                ) { _, dy -> acc += dy }
             },
     ) {
         Column(
@@ -93,103 +99,112 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 28.dp),
         ) {
-            // Top bar
+            // ── Top bar ──────────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse")
+                    Icon(Icons.Rounded.KeyboardArrowDown, "Kapat", modifier = Modifier.size(32.dp))
                 }
-                Text("Now Playing", style = MaterialTheme.typography.titleMedium)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "ŞİMDİ OYNUYOR",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        episode?.podcastTitle ?: "",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 IconButton(onClick = { }) {
-                    Icon(Icons.Rounded.MoreVert, contentDescription = "More")
+                    Icon(Icons.Rounded.MoreVert, "Daha fazla")
                 }
             }
 
             Spacer(Modifier.weight(1f))
 
-            // Artwork
-            CoverArt(
-                icon = MockData.featured.first().icon,
-                modifier = Modifier
-                    .fillMaxWidth(0.78f)
-                    .aspectRatio(1f)
-                    .align(Alignment.CenterHorizontally)
-                    .graphicsLayer { scaleX = artScale; scaleY = artScale },
+            // ── Artwork ───────────────────────────────────────────────────────
+            PodcastArtwork(
+                imageUrl = episode?.artworkUrl ?: "",
                 shape = MaterialTheme.shapes.extraLarge,
-                container = MaterialTheme.colorScheme.primaryContainer,
-                content = MaterialTheme.colorScheme.onPrimaryContainer,
-                iconFraction = 0.34f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .graphicsLayer { scaleX = artScale; scaleY = artScale },
             )
 
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.weight(0.6f))
 
-            // Titles
+            // ── Episode info ──────────────────────────────────────────────────
             Text(
-                text = PlayerState.episodeTitle,
+                text = episode?.title ?: "",
                 style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Start,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
-                text = PlayerState.showTitle,
+                text = episode?.podcastTitle ?: "",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(0.4f))
 
-            // Progress
+            // ── Slider ────────────────────────────────────────────────────────
             Slider(
                 value = sliderValue,
-                onValueChange = {
-                    dragging = true
-                    scrubValue = it
-                },
-                onValueChangeFinished = {
-                    PlayerState.seekTo(scrubValue)
-                    dragging = false
-                },
-            )
-            Row(
+                onValueChange = { dragging = true; scrubValue = it },
+                onValueChangeFinished = { player.seekTo(scrubValue); dragging = false },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                val pos = if (dragging) {
+                    (scrubValue * player.durationMs / 1000).toLong().toInt()
+                } else {
+                    (player.positionMs / 1000).toInt()
+                }
                 Text(
-                    text = formatTime((sliderValue * PlayerState.durationSeconds).toInt()),
+                    formatTime(pos),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = formatTime(PlayerState.durationSeconds),
+                    formatTime((player.durationMs / 1000).toInt()),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
 
+            // ── Playback controls ─────────────────────────────────────────────
             PlaybackControls(
-                isPlaying = isPlaying,
-                onToggle = { PlayerState.togglePlayPause() },
-                onPrevious = { PlayerState.seekTo(0f) },
-                onNext = { PlayerState.seekTo(1f) },
-                onSeekBack = { PlayerState.seekTo(PlayerState.progress - 0.05f) },
-                onSeekForward = { PlayerState.seekTo(PlayerState.progress + 0.05f) },
+                isPlaying = player.isPlaying,
+                isBuffering = player.isBuffering,
+                onToggle = { player.togglePlayPause() },
+                onPrevious = { player.skipToPrevious() },
+                onNext = { player.skipToNext() },
+                onSeekBack = { player.seekBy(-10_000L) },
+                onSeekForward = { player.seekBy(30_000L) },
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Secondary controls
+            // ── Secondary controls ────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -197,51 +212,46 @@ fun PlayerScreen(
             ) {
                 IconButton(onClick = { liked = !liked }) {
                     Icon(
-                        imageVector = if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Like",
-                        tint = if (liked) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        "Beğen",
+                        tint = if (liked) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconButton(onClick = { }) {
-                    Icon(
-                        Icons.Rounded.Speed,
-                        contentDescription = "Playback speed",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Box {
+                    IconButton(onClick = { showSpeedMenu = true }) {
+                        Icon(
+                            Icons.Rounded.Speed, "Oynatma hızı",
+                            tint = if (player.playbackSpeed != 1f) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
+                        listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                            DropdownMenuItem(
+                                text = { Text("${speed}×", fontWeight = if (speed == player.playbackSpeed) FontWeight.Bold else FontWeight.Normal) },
+                                onClick = { player.setSpeed(speed); showSpeedMenu = false },
+                            )
+                        }
+                    }
                 }
                 IconButton(onClick = { }) {
-                    Icon(
-                        Icons.Rounded.Timer,
-                        contentDescription = "Sleep timer",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Icon(Icons.Rounded.Timer, "Uyku zamanlayıcı",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = { }) {
-                    Icon(
-                        Icons.Rounded.QueueMusic,
-                        contentDescription = "Queue",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Icon(Icons.Rounded.QueueMusic, "Sıra",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
-private fun formatTime(totalSeconds: Int): String {
-    val s = totalSeconds.coerceAtLeast(0)
-    val hours = s / 3600
-    val minutes = (s % 3600) / 60
-    val seconds = s % 60
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%d:%02d".format(minutes, seconds)
-    }
+private fun formatTime(totalSec: Int): String {
+    val s = totalSec.coerceAtLeast(0)
+    val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
 }
