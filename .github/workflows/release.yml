@@ -1,0 +1,74 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches:
+      - claude/funny-cori-ky9xwb
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Debug APK → GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Source ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Java ─────────────────────────────────────────────────────────────
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # ── 3. Gradle ───────────────────────────────────────────────────────────
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      # ── 4. Android SDK path (already on ubuntu-latest) ───────────────────
+      - name: Write local.properties
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
+
+      # ── 5. Build ─────────────────────────────────────────────────────────
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dkotlin.incremental=false -Xmx4g"
+
+      # ── 6. Rename artifact ──────────────────────────────────────────────
+      - name: Stage artifact
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-debug.apk release/Echoes-v0.1-beta.apk
+          ls -lh release/
+
+      # ── 7. Tag ──────────────────────────────────────────────────────────
+      - name: Create / update git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f v0.1-beta
+          git push origin v0.1-beta --force
+
+      # ── 8. Release ──────────────────────────────────────────────────────
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete previous release if it exists
+          gh release delete v0.1-beta --yes 2>/dev/null || true
+
+          gh release create v0.1-beta \
+            --target "${{ github.sha }}" \
+            --title "Echoes v0.1-beta" \
+            --notes "$(cat CHANGELOG.md)" \
+            "release/Echoes-v0.1-beta.apk#Echoes v0.1-beta (debug APK)"
