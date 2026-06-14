@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.material.podcast.ui.theme.AppThemeColor
 import com.material.podcast.ui.theme.DarkModeOption
@@ -122,6 +123,15 @@ fun ThemePickerSheet(
                     }
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Echoes · v0.1 beta · crafted with Claude",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
