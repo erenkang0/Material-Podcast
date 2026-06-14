@@ -78,7 +78,6 @@ import com.material.podcast.ui.viewmodel.ShowDetailsViewModel
 fun ShowDetailsScreen(
     podcastId: String,
     onBack: () -> Unit,
-    onOpenPlayer: () -> Unit,
 ) {
     val vm: ShowDetailsViewModel = viewModel(
         key = podcastId,
@@ -126,7 +125,6 @@ fun ShowDetailsScreen(
                 episodes = state.episodes,
                 listState = listState,
                 contentPadding = innerPadding,
-                onOpenPlayer = onOpenPlayer,
             )
         }
     }
@@ -178,7 +176,6 @@ private fun SuccessContent(
     episodes: List<PodcastEpisode>,
     listState: LazyListState,
     contentPadding: PaddingValues,
-    onOpenPlayer: () -> Unit,
 ) {
     val player = LocalPlayer.current
     var following by remember(podcast.id) { mutableStateOf(FavoritesStore.isFavorite(podcast.id)) }
@@ -204,7 +201,7 @@ private fun SuccessContent(
                 onPlay = {
                     val first = episodes.firstOrNull() ?: return@ActionRow
                     player.play(first)
-                    onOpenPlayer()
+                    player.expandSheet = true
                 },
                 onFollowToggle = {
                     following = !following
@@ -239,7 +236,7 @@ private fun SuccessContent(
                 episode = episode,
                 onPlay = {
                     player.play(episode)
-                    onOpenPlayer()
+                    player.expandSheet = true
                 },
             )
             HorizontalDivider(

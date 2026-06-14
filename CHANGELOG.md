@@ -1,31 +1,45 @@
 # Changelog
 
+## v0.2-beta — 2026-06-14
+
+### Now Playing — physics-grade redesign
+- **NowPlayingBar** — mini player strip with horizontal swipe-to-skip.
+  Swipe left → next, swipe right → previous.  
+  Spring snap-back with elastic resistance past the commit threshold.
+  Haptic pulse on play/pause, strong haptic on swipe commit.
+- **FullPlayerSheet** — replaces the old full-screen player with a
+  `ModalBottomSheet` that uses Material 3's built-in `AnchoredDraggable`
+  spring physics. Swipe down to dismiss.
+- **Breathing artwork** — artwork gently scales 1.0 → 1.025 in a slow
+  sine wave while playing; springs to 0.96× when paused.
+- **Seek haptic ticks** — light haptic every 5% of seek bar (20 ticks
+  across the full duration) while scrubbing.
+- **Speed picker** with haptic confirmation for each selection.
+
+### Bug fixes
+- Fixed `Unresolved reference 'animateFloat'` compile errors in
+  `AppComponents.kt` and `PlayerScreen.kt` that blocked the v0.1 build.
+
+---
+
 ## v0.1-beta — 2026-06-14
 
-First public **beta** of **Echoes**, a native Material 3 podcast UI for Android.
-
-> ⚠️ Beta: this is a UI / interaction prototype. The layout, theming and motion
-> are complete, but there is no audio engine or network layer yet — content is
-> structural placeholder data.
+First public **beta** of **Echoes**, a native Material 3 podcast app for Android.
 
 ### Highlights
-- **5 screens** — Discover / Home, Show Details, Now Playing, Library, and
-  Search & Explore — built entirely from native Material 3 components.
-- **5 eye-friendly color themes** (Indigo, Emerald, Rose, Amber, Lavender), each
-  with a matched **light and dark** scheme, switchable from an in-app theme sheet.
-- **Animated theme switching** — every color role cross-fades when you change
-  palette or light/dark mode.
-- **Rich, tasteful motion** — fade-through tab transitions, a slide-up Now Playing
-  screen with swipe-to-dismiss, springy press feedback, an animated mini-player
-  equalizer, a morphing play/pause glyph, and a breathing album-art pulse.
-- **New adaptive app icon** — a sound-wave emblem with a violet → indigo gradient
-  and an Android 13+ themed (monochrome) variant.
+- Real podcast data via iTunes Search API (no key required) + RSS episode feeds.
+- ExoPlayer (Media3) audio engine with background playback service.
+- 5 screens: Home, Search, Show Details, Library, Now Playing.
+- 5 switchable color themes (Indigo, Emerald, Rose, Amber, Lavender),
+  each with light and dark mode.
+- Zero-jank scrolling with `@Immutable` models and `key = { id }` in all lazy lists.
+- Adaptive app icon with Android 13+ monochrome variant.
 
 ### Tech
-- Kotlin 2.0 · Jetpack Compose (BOM 2024.12.01) · Material 3
+- Kotlin 2.0 · Compose BOM 2024.12.01 · Material 3 · Media3 ExoPlayer 1.5.1
+- Retrofit 2.11.0 + OkHttp 4.12.0 · Coil 2.7.0
 - `minSdk` 31 · `targetSdk` / `compileSdk` 36 · edge-to-edge
 
 ---
 
-🤖 Developed with **Claude** (Anthropic). The design, architecture and Compose
-implementation in this release were produced in collaboration with Claude.
+🤖 Developed with **Claude** (Anthropic).

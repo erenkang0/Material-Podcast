@@ -7,9 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
@@ -20,7 +18,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.material.podcast.ui.screens.HomeScreen
 import com.material.podcast.ui.screens.LibraryScreen
-import com.material.podcast.ui.screens.PlayerScreen
 import com.material.podcast.ui.screens.SearchScreen
 import com.material.podcast.ui.screens.ShowDetailsScreen
 
@@ -28,7 +25,6 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object Search : Screen("search")
     data object Library : Screen("library")
-    data object Player : Screen("player")
     data object ShowDetails : Screen("show/{podcastId}") {
         fun create(id: String) = "show/${id}"
     }
@@ -72,7 +68,6 @@ fun AppNavHost(
         composable(Screen.Library.route) {
             LibraryScreen(
                 onOpenShow = { navController.navigate(Screen.ShowDetails.create(it)) },
-                onOpenPlayer = { navController.navigate(Screen.Player.route) },
                 onOpenSearch = { onSelectTab(Screen.Search.route) },
                 onOpenThemes = onOpenThemes,
             )
@@ -88,16 +83,7 @@ fun AppNavHost(
             ShowDetailsScreen(
                 podcastId = podcastId,
                 onBack = { navController.popBackStack() },
-                onOpenPlayer = { navController.navigate(Screen.Player.route) },
             )
-        }
-
-        composable(
-            route = Screen.Player.route,
-            enterTransition = { slideInVertically(SlideSpring) { it } + fadeIn(tween(250)) },
-            popExitTransition = { slideOutVertically(SlideSpring) { it } + fadeOut(tween(250)) },
-        ) {
-            PlayerScreen(onBack = { navController.popBackStack() })
         }
     }
 }

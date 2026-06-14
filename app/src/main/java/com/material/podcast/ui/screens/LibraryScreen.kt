@@ -49,7 +49,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun LibraryScreen(
     onOpenShow: (String) -> Unit,
-    onOpenPlayer: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenThemes: () -> Unit,
 ) {
@@ -99,7 +98,7 @@ fun LibraryScreen(
             ) { page ->
                 when (page) {
                     0 -> SavedPodcastsGrid(onOpenShow = onOpenShow)
-                    else -> RecentEpisodesTab(onOpenPlayer = onOpenPlayer)
+                    else -> RecentEpisodesTab()
                 }
             }
         }
@@ -127,7 +126,7 @@ private fun SavedPodcastsGrid(onOpenShow: (String) -> Unit) {
 }
 
 @Composable
-private fun RecentEpisodesTab(onOpenPlayer: () -> Unit) {
+private fun RecentEpisodesTab() {
     val player = LocalPlayer.current
     val history = player.history
     if (history.isEmpty()) {
@@ -142,7 +141,7 @@ private fun RecentEpisodesTab(onOpenPlayer: () -> Unit) {
                     episode = episode,
                     onPlay = {
                         player.play(episode)
-                        onOpenPlayer()
+                        player.expandSheet = true
                     },
                 )
             }

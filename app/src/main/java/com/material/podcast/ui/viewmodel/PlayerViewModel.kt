@@ -25,6 +25,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     var nowPlaying by mutableStateOf<PodcastEpisode?>(null)
         private set
+    var expandSheet by mutableStateOf(false)
     var isPlaying by mutableStateOf(false)
         private set
     var isBuffering by mutableStateOf(false)

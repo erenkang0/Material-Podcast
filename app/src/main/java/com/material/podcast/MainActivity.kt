@@ -43,7 +43,8 @@ import androidx.navigation.compose.rememberNavController
 import com.material.podcast.navigation.AppNavHost
 import com.material.podcast.navigation.Screen
 import com.material.podcast.ui.LocalPlayer
-import com.material.podcast.ui.components.MiniPlayer
+import com.material.podcast.ui.components.FullPlayerSheet
+import com.material.podcast.ui.components.NowPlayingBar
 import com.material.podcast.ui.components.ThemePickerSheet
 import com.material.podcast.ui.theme.EchoesTheme
 import com.material.podcast.ui.theme.ThemeController
@@ -109,8 +110,8 @@ private fun PodcastApp(themeController: ThemeController) {
                         enter = slideInVertically { it } + fadeIn(),
                         exit = slideOutVertically { it } + fadeOut(),
                     ) {
-                        MiniPlayer(
-                            onExpand = { navController.navigate(Screen.Player.route) },
+                        NowPlayingBar(
+                            onExpand = { player.expandSheet = true },
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
                     }
@@ -155,5 +156,9 @@ private fun PodcastApp(themeController: ThemeController) {
             controller = themeController,
             onDismiss = { showThemeSheet = false },
         )
+    }
+
+    if (player.expandSheet) {
+        FullPlayerSheet(onDismiss = { player.expandSheet = false })
     }
 }
