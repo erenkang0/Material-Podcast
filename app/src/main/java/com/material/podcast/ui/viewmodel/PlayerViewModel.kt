@@ -16,6 +16,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.material.podcast.EchoesApplication
 import com.material.podcast.data.model.FavoriteMoment
@@ -56,6 +57,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     var artworkColorSeed by mutableIntStateOf(0)
         private set
     var isLiked by mutableStateOf(false)
+        private set
+    var skipSilence by mutableStateOf(false)
+        private set
+    var voiceBoost by mutableStateOf(false)
         private set
 
     /** The active playlist (current podcast context); native next/previous walk this. */
@@ -331,6 +336,24 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setSpeed(speed: Float) {
         playbackSpeed = speed
         controller?.setPlaybackSpeed(speed)
+    }
+
+    /** Skip near-silent gaps (Media3 silence skipping), handled in the playback service. */
+    fun toggleSkipSilence() {
+        skipSilence = !skipSilence
+        sendAudioCommand(PlaybackService.CMD_SKIP_SILENCE, skipSilence)
+    }
+
+    /** Boost quiet speech via a LoudnessEnhancer on the service's audio session. */
+    fun toggleVoiceBoost() {
+        voiceBoost = !voiceBoost
+        sendAudioCommand(PlaybackService.CMD_VOICE_BOOST, voiceBoost)
+    }
+
+    private fun sendAudioCommand(action: String, enabled: Boolean) {
+        val ctrl = controller ?: return
+        val args = android.os.Bundle().apply { putBoolean(PlaybackService.EXTRA_ENABLED, enabled) }
+        ctrl.sendCustomCommand(SessionCommand(action, android.os.Bundle.EMPTY), args)
     }
 
     fun setSleepTimer(minutes: Int) {

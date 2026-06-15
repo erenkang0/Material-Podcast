@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
@@ -536,6 +537,34 @@ private fun FullPlayerContent(
                 valueRange = 0.5f..2.0f,
                 steps = 5,
                 modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Smart audio — skip silences + voice boost (handled in the playback service)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = player.skipSilence,
+                onClick = {
+                    player.toggleSkipSilence()
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                },
+                label = { Text("Sessizlikleri atla") },
+                leadingIcon = if (player.skipSilence) {
+                    { Icon(Icons.Rounded.Check, null, Modifier.size(16.dp)) }
+                } else null,
+            )
+            FilterChip(
+                selected = player.voiceBoost,
+                onClick = {
+                    player.toggleVoiceBoost()
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                },
+                label = { Text("Ses yükselt") },
+                leadingIcon = if (player.voiceBoost) {
+                    { Icon(Icons.Rounded.Check, null, Modifier.size(16.dp)) }
+                } else null,
             )
         }
 
