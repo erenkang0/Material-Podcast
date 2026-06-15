@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -324,19 +325,6 @@ private fun FullPlayerContent(
 ) {
     val episode = player.nowPlaying ?: return
 
-    val infinite = rememberInfiniteTransition(label = "artBreath")
-    val breathScale by infinite.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.025f,
-        animationSpec = infiniteRepeatable(tween(2400), RepeatMode.Reverse),
-        label = "breath",
-    )
-    val artScale by animateFloatAsState(
-        targetValue = if (player.isPlaying) breathScale else 0.96f,
-        animationSpec = ArtSpring,
-        label = "artScale",
-    )
-
     var dragging by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
     val sliderValue = if (dragging) scrubValue else player.progress
@@ -382,8 +370,7 @@ private fun FullPlayerContent(
             shape = MaterialTheme.shapes.extraLarge,
             modifier = Modifier
                 .fillMaxWidth(0.78f)
-                .aspectRatio(1f)
-                .graphicsLayer { scaleX = artScale; scaleY = artScale },
+                .aspectRatio(1f),
         )
 
         Spacer(Modifier.height(20.dp))
@@ -441,10 +428,19 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(12.dp))
 
-        Slider(
-            value = sliderValue,
-            onValueChange = { dragging = true; scrubValue = it },
-            onValueChangeFinished = { player.seekTo(scrubValue); dragging = false },
+        WavySeekBar(
+            fraction = sliderValue,
+            playing = player.isPlaying,
+            onScrubStart = { dragging = true },
+            onScrub = { scrubValue = it; dragging = true },
+            onScrubFinished = {
+                player.seekTo(it)
+                dragging = false
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            },
+            activeColor = MaterialTheme.colorScheme.primary,
+            inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+            thumbColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -519,71 +515,52 @@ private fun FullPlayerContent(
             )
         }
 
-        // Queue panel — expands above secondary controls
+        // Queue panel — "Up next" from the current podcast + "Previously played"
         AnimatedVisibility(
             visible = showQueue,
             enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
             exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
         ) {
+            val upNext = player.upNext
+            val history = player.history
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        "Son çalınanlar",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Text("Sıra", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     TextButton(onClick = { showQueue = false }) { Text("Kapat") }
                 }
-                if (player.history.isEmpty()) {
-                    Text(
-                        "Sıra boş",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 180.dp)) {
-                        items(player.history, key = { it.guid }) { ep ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { player.play(ep) }
-                                    .padding(vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                PodcastArtwork(
-                                    imageUrl = ep.artworkUrl,
-                                    shape = MaterialTheme.shapes.small,
-                                    modifier = Modifier.size(38.dp),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        ep.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        ep.podcastTitle,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                if (ep.guid == player.nowPlaying?.guid) {
-                                    Icon(
-                                        Icons.Rounded.QueueMusic,
-                                        "Şu an çalıyor",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
+                LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                    item(key = "up_header") {
+                        QueueSubHeader("Sıradaki")
+                    }
+                    if (upNext.isEmpty()) {
+                        item(key = "up_empty") {
+                            Text(
+                                "Bu bölümden sonrası yok",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 6.dp),
+                            )
+                        }
+                    } else {
+                        items(upNext, key = { "up_${it.guid}" }) { ep ->
+                            QueueRow(ep, isCurrent = false) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                player.playQueueIndex(player.queue.indexOfFirst { q -> q.guid == ep.guid })
+                            }
+                        }
+                    }
+                    if (history.isNotEmpty()) {
+                        item(key = "hist_header") {
+                            QueueSubHeader("Önceki dinlediklerim")
+                        }
+                        items(history, key = { "hist_${it.guid}" }) { ep ->
+                            QueueRow(ep, isCurrent = ep.guid == player.nowPlaying?.guid) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                player.play(ep)
                             }
                         }
                     }
@@ -599,8 +576,8 @@ private fun FullPlayerContent(
             exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                if (player.sleepTimerMs > 0) {
-                    Row(
+                when {
+                    player.sleepTimerMs > 0 -> Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
@@ -610,31 +587,58 @@ private fun FullPlayerContent(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        TextButton(onClick = { player.cancelSleepTimer(); showSleepTimer = false }) {
-                            Text("İptal")
-                        }
+                        TextButton(onClick = {
+                            player.cancelSleepTimer()
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showSleepTimer = false
+                        }) { Text("İptal") }
                     }
-                } else {
-                    Text(
-                        "Uyku zamanlayıcı",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(
+                    player.sleepAtEnd -> Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        listOf(10, 15, 30, 45, 60).forEach { minutes ->
-                            FilterChip(
-                                selected = false,
-                                onClick = {
-                                    player.setSleepTimer(minutes)
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    showSleepTimer = false
-                                },
-                                label = { Text("$minutes dk") },
-                            )
+                        Text(
+                            "Bölüm bitince duracak",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        TextButton(onClick = {
+                            player.cancelSleepTimer()
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showSleepTimer = false
+                        }) { Text("İptal") }
+                    }
+                    else -> {
+                        Text(
+                            "Uyku zamanlayıcı",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            item(key = "end") {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {
+                                        player.setSleepAtEpisodeEnd()
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        showSleepTimer = false
+                                    },
+                                    label = { Text("Bölüm bitince") },
+                                )
+                            }
+                            items(listOf(5, 10, 15, 30, 45, 60, 90), key = { it }) { minutes ->
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {
+                                        player.setSleepTimer(minutes)
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        showSleepTimer = false
+                                    },
+                                    label = { Text("$minutes dk") },
+                                )
+                            }
                         }
                     }
                 }
@@ -655,7 +659,7 @@ private fun FullPlayerContent(
                 Icon(
                     Icons.Rounded.Timer,
                     "Uyku zamanlayıcı",
-                    tint = if (player.sleepTimerMs > 0 || showSleepTimer)
+                    tint = if (player.sleepTimerMs > 0 || player.sleepAtEnd || showSleepTimer)
                         MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -688,11 +692,69 @@ private fun FullPlayerContent(
 }
 
 @Composable
+private fun QueueSubHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
+private fun QueueRow(
+    episode: com.material.podcast.data.model.PodcastEpisode,
+    isCurrent: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PodcastArtwork(
+            imageUrl = episode.artworkUrl,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.size(38.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                episode.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                episode.podcastTitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (isCurrent) {
+            Icon(
+                Icons.Rounded.QueueMusic, "Şu an çalıyor",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun DownloadButton(episode: com.material.podcast.data.model.PodcastEpisode) {
     val dm = EchoesApplication.instance.downloadManager
+    val haptics = LocalHapticFeedback.current
     val downloaded = LibraryStore.isDownloaded(episode.guid)
     val state = dm.states[episode.guid]
     IconButton(onClick = {
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         when {
             downloaded -> dm.delete(episode.guid)
             state?.status == DownloadStatus.Downloading -> {} // already running

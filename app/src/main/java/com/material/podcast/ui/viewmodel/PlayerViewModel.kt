@@ -51,17 +51,25 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var sleepTimerMs by mutableLongStateOf(0L)
         private set
-
-    /** Dominant ARGB color pulled from the current cover (0 = none/not ready). */
+    var sleepAtEnd by mutableStateOf(false)
+        private set
     var artworkColorSeed by mutableIntStateOf(0)
         private set
-    /** Whether the current episode is in the user's Beğeniler list. */
     var isLiked by mutableStateOf(false)
         private set
 
+    /** The active playlist (current podcast context); native next/previous walk this. */
+    val queue = mutableStateListOf<PodcastEpisode>()
+    var currentQueueIndex by mutableIntStateOf(0)
+        private set
+    /** Episodes that come after the current one in [queue]. */
+    val upNext: List<PodcastEpisode>
+        get() = queue.drop(currentQueueIndex + 1)
+
+    /** Previously played episodes (most recent first). */
     val history = mutableStateListOf<PodcastEpisode>()
-    private var pendingEpisode: PodcastEpisode? = null
-    private var pendingStartMs: Long = 0L
+
+    private var pendingPlay: (() -> Unit)? = null
     private var sleepJob: Job? = null
     private var lastSavedAt: Long = 0L
 
@@ -72,6 +80,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         override fun onPlaybackStateChanged(state: Int) {
             isBuffering = state == Player.STATE_BUFFERING
             updatePosition()
+        }
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            syncToCurrentItem()
+            if (sleepAtEnd) {
+                // Stop instead of rolling into the next episode.
+                controller?.pause()
+                sleepAtEnd = false
+            }
         }
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
@@ -85,10 +101,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 controller = controllerFuture.get().also { ctrl ->
                     ctrl.addListener(listener)
-                    pendingEpisode?.let { ep ->
-                        performPlay(ep, ctrl, pendingStartMs)
-                        pendingEpisode = null
-                        pendingStartMs = 0L
+                    playbackSpeed = ctrl.playbackParameters.speed
+                    val pending = pendingPlay
+                    if (pending != null) {
+                        pending()
+                        pendingPlay = null
+                    } else if (ctrl.currentMediaItem != null && ctrl.playbackState != Player.STATE_IDLE) {
+                        // Reconnecting to a session that is already playing (e.g. opened from the
+                        // notification after the UI process was recreated) — restore the UI state.
+                        restoreFromController(ctrl)
                     }
                 }
             } catch (_: Exception) {}
@@ -106,13 +127,49 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Persist the resume point at most every 5s while playing. */
-    private fun maybeSaveProgress() {
-        val ep = nowPlaying ?: return
-        val now = System.currentTimeMillis()
-        if (now - lastSavedAt < 5_000L) return
-        lastSavedAt = now
-        LibraryStore.saveProgress(ep, positionMs, durationMs)
+    private fun restoreFromController(ctrl: MediaController) {
+        if (queue.isEmpty()) {
+            val saved = LibraryStore.getCurrentQueue()
+            if (saved.isNotEmpty()) { queue.clear(); queue.addAll(saved) }
+        }
+        isPlaying = ctrl.isPlaying
+        syncToCurrentItem()
+        updatePosition()
+    }
+
+    /** Point [nowPlaying] (and derived state) at the controller's current item. */
+    private fun syncToCurrentItem() {
+        val ctrl = controller ?: return
+        val index = ctrl.currentMediaItemIndex
+        currentQueueIndex = index
+        val episode = queue.getOrNull(index)
+            ?: ctrl.currentMediaItem?.let { mediaItemToEpisode(it) }
+            ?: return
+        if (queue.getOrNull(index)?.guid != episode.guid && queue.none { it.guid == episode.guid }) {
+            // queue lost; keep a single-item context so the UI still works
+            if (queue.isEmpty()) queue.add(episode)
+        }
+        if (nowPlaying?.guid != episode.guid) {
+            nowPlaying = episode
+            isLiked = LibraryStore.isLiked(episode.guid)
+            updateArtworkColor(episode)
+            pushHistory(episode)
+        }
+    }
+
+    private fun mediaItemToEpisode(item: MediaItem): PodcastEpisode {
+        val md = item.mediaMetadata
+        return PodcastEpisode(
+            guid = item.mediaId,
+            title = md.title?.toString() ?: "",
+            description = "",
+            audioUrl = item.localConfiguration?.uri?.toString() ?: "",
+            artworkUrl = md.artworkUri?.toString() ?: "",
+            publishedDate = "",
+            durationSeconds = 0,
+            podcastTitle = md.artist?.toString() ?: "",
+            podcastId = "",
+        )
     }
 
     private fun updatePosition() {
@@ -124,47 +181,82 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         progress = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
     }
 
-    fun play(episode: PodcastEpisode, startPositionMs: Long = 0L) {
-        nowPlaying = episode
-        isLiked = LibraryStore.isLiked(episode.guid)
-        artworkColorSeed = 0
-        lastSavedAt = System.currentTimeMillis()
+    private fun maybeSaveProgress() {
+        val ep = nowPlaying ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastSavedAt < 5_000L) return
+        lastSavedAt = now
+        LibraryStore.saveProgress(ep, positionMs, durationMs)
+    }
+
+    private fun pushHistory(episode: PodcastEpisode) {
         history.removeIf { it.guid == episode.guid }
         history.add(0, episode)
-        if (history.size > 50) history.removeLastOrNull()
+        if (history.size > 50) history.removeAt(history.lastIndex)
+    }
 
+    private fun updateArtworkColor(episode: PodcastEpisode) {
+        artworkColorSeed = 0
         viewModelScope.launch {
             val seed = extractArtworkColor(getApplication<Application>(), episode.artworkUrl)
             if (seed != null && nowPlaying?.guid == episode.guid) artworkColorSeed = seed
         }
+    }
 
-        val ctrl = controller
-        if (ctrl != null) {
-            performPlay(episode, ctrl, startPositionMs)
-        } else {
-            pendingEpisode = episode
-            pendingStartMs = startPositionMs
+    /**
+     * Play [episode] within an optional [context] playlist so next/previous walk the
+     * surrounding episodes. Defaults to a single-item context.
+     */
+    fun play(
+        episode: PodcastEpisode,
+        context: List<PodcastEpisode> = listOf(episode),
+        startPositionMs: Long = 0L,
+    ) {
+        val list = context.ifEmpty { listOf(episode) }
+        val startIndex = list.indexOfFirst { it.guid == episode.guid }.coerceAtLeast(0)
+
+        nowPlaying = episode
+        isLiked = LibraryStore.isLiked(episode.guid)
+        lastSavedAt = System.currentTimeMillis()
+        queue.clear(); queue.addAll(list)
+        currentQueueIndex = startIndex
+        pushHistory(episode)
+        updateArtworkColor(episode)
+        LibraryStore.saveCurrentQueue(list)
+
+        val action = {
+            controller?.let { ctrl ->
+                val items = list.map(::toMediaItem)
+                ctrl.setMediaItems(items, startIndex, startPositionMs)
+                ctrl.prepare()
+                ctrl.play()
+            }
+        }
+        if (controller != null) action() else pendingPlay = action
+    }
+
+    fun resume(point: ResumePoint) = play(point.episode, startPositionMs = point.positionMs)
+
+    fun playQueueIndex(index: Int) {
+        val ctrl = controller ?: return
+        if (index in queue.indices) {
+            ctrl.seekToDefaultPosition(index)
+            ctrl.play()
         }
     }
 
-    /** Resume a saved "continue listening" point from its stored position. */
-    fun resume(point: ResumePoint) = play(point.episode, point.positionMs)
-
-    private fun performPlay(episode: PodcastEpisode, ctrl: MediaController, startPositionMs: Long) {
+    private fun toMediaItem(episode: PodcastEpisode): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(episode.title)
             .setArtist(episode.podcastTitle)
             .setArtworkUri(android.net.Uri.parse(episode.artworkUrl))
             .build()
-        // Prefer an offline copy when the episode has been downloaded.
         val uri = downloadManager.localUriOrNull(episode.guid) ?: episode.audioUrl
-        val item = MediaItem.Builder()
+        return MediaItem.Builder()
+            .setMediaId(episode.guid)
             .setUri(uri)
             .setMediaMetadata(metadata)
             .build()
-        if (startPositionMs > 0L) ctrl.setMediaItem(item, startPositionMs) else ctrl.setMediaItem(item)
-        ctrl.prepare()
-        ctrl.play()
     }
 
     fun togglePlayPause() {
@@ -183,7 +275,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         isLiked = LibraryStore.isLiked(ep.guid)
     }
 
-    /** Bookmark the current position as a favorite moment with an optional note. */
     fun addMoment(note: String) {
         val ep = nowPlaying ?: return
         LibraryStore.addMoment(
@@ -218,12 +309,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun skipToNext() {
         val ctrl = controller ?: return
-        ctrl.seekTo(ctrl.duration.coerceAtLeast(0L))
+        if (ctrl.hasNextMediaItem()) ctrl.seekToNextMediaItem() else ctrl.seekTo(ctrl.duration.coerceAtLeast(0L))
     }
 
     fun skipToPrevious() {
         val ctrl = controller ?: return
-        if (ctrl.currentPosition > 3000) ctrl.seekTo(0L) else ctrl.seekToPreviousMediaItem()
+        if (ctrl.currentPosition > 3000 || !ctrl.hasPreviousMediaItem()) ctrl.seekTo(0L)
+        else ctrl.seekToPreviousMediaItem()
     }
 
     fun setSpeed(speed: Float) {
@@ -234,6 +326,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setSleepTimer(minutes: Int) {
         sleepJob?.cancel()
         sleepTimerMs = 0L
+        sleepAtEnd = false
         if (minutes == 0) return
         sleepJob = viewModelScope.launch {
             val endAt = System.currentTimeMillis() + minutes * 60_000L
@@ -246,10 +339,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Stop playback when the current episode finishes. */
+    fun setSleepAtEpisodeEnd() {
+        sleepJob?.cancel()
+        sleepTimerMs = 0L
+        sleepAtEnd = true
+    }
+
     fun cancelSleepTimer() {
         sleepJob?.cancel()
         sleepJob = null
         sleepTimerMs = 0L
+        sleepAtEnd = false
     }
 
     override fun onCleared() {

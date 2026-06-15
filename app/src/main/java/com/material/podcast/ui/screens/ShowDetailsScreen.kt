@@ -261,7 +261,7 @@ private fun SuccessContent(
                 following = following,
                 onPlay = {
                     val first = episodes.firstOrNull() ?: return@ActionRow
-                    player.play(first)
+                    player.play(first, episodes)
                     player.expandSheet = true
                 },
                 onFollowToggle = {
@@ -304,7 +304,7 @@ private fun SuccessContent(
             EpisodeListItem(
                 episode = episode,
                 onPlay = {
-                    player.play(episode)
+                    player.play(episode, episodes)
                     player.expandSheet = true
                 },
             )

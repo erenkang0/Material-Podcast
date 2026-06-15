@@ -29,6 +29,7 @@ object LibraryStore {
     private const val KEY_CATEGORIES = "categories"
     private const val KEY_RESUME = "resume"
     private const val KEY_RECENT = "recent"
+    private const val KEY_CURRENT_QUEUE = "current_queue"
 
     const val MAX_CATEGORIES = 10
     private const val MAX_RESUME = 40
@@ -175,5 +176,66 @@ object LibraryStore {
         recentPodcasts.add(0, podcast)
         while (recentPodcasts.size > MAX_RECENT) recentPodcasts.removeAt(recentPodcasts.lastIndex)
         persist(KEY_RECENT, recentPodcasts)
+    }
+
+    // ---- Active playback queue (for restoring after process death) ---------
+
+    fun saveCurrentQueue(queue: List<PodcastEpisode>) = persist(KEY_CURRENT_QUEUE, queue)
+
+    fun getCurrentQueue(): List<PodcastEpisode> =
+        load(KEY_CURRENT_QUEUE, object : TypeToken<List<PodcastEpisode>>() {})
+
+    // ---- Full JSON backup / restore ----------------------------------------
+
+    /** Serialize the entire on-device library to a single JSON document. */
+    fun exportJson(): String {
+        val snapshot = mapOf(
+            "version" to 1,
+            KEY_FOLLOWS to followedPodcasts.toList(),
+            KEY_LIKES to likedEpisodes.toList(),
+            KEY_MOMENTS to moments.toList(),
+            KEY_DOWNLOADS to downloads.toList(),
+            KEY_CATEGORIES to categories.toList(),
+            KEY_RESUME to resumePoints.toList(),
+            KEY_RECENT to recentPodcasts.toList(),
+        )
+        return gson.toJson(snapshot)
+    }
+
+    /** Replace the library from a previously exported JSON document. Returns true on success. */
+    fun importJson(json: String): Boolean {
+        return try {
+            val type = object : TypeToken<Map<String, Any>>() {}.type
+            val map: Map<String, Any> = gson.fromJson(json, type) ?: return false
+
+            fun <T> section(key: String, token: TypeToken<List<T>>): List<T> {
+                val element = map[key] ?: return emptyList()
+                return gson.fromJson(gson.toJson(element), token.type) ?: emptyList()
+            }
+
+            followedPodcasts.replaceAllPersist(KEY_FOLLOWS,
+                section(KEY_FOLLOWS, object : TypeToken<List<Podcast>>() {}))
+            likedEpisodes.replaceAllPersist(KEY_LIKES,
+                section(KEY_LIKES, object : TypeToken<List<PodcastEpisode>>() {}))
+            moments.replaceAllPersist(KEY_MOMENTS,
+                section(KEY_MOMENTS, object : TypeToken<List<FavoriteMoment>>() {}))
+            downloads.replaceAllPersist(KEY_DOWNLOADS,
+                section(KEY_DOWNLOADS, object : TypeToken<List<PodcastEpisode>>() {}))
+            resumePoints.replaceAllPersist(KEY_RESUME,
+                section(KEY_RESUME, object : TypeToken<List<ResumePoint>>() {}))
+            recentPodcasts.replaceAllPersist(KEY_RECENT,
+                section(KEY_RECENT, object : TypeToken<List<Podcast>>() {}))
+            val cats = section(KEY_CATEGORIES, object : TypeToken<List<ExploreCategory>>() {})
+            if (cats.isNotEmpty()) categories.replaceAllPersist(KEY_CATEGORIES, cats)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun <T> SnapshotStateList<T>.replaceAllPersist(key: String, items: List<T>) {
+        clear()
+        addAll(items)
+        persist(key, this)
     }
 }

@@ -204,7 +204,7 @@ private fun MomentsTab() {
                 MomentRow(
                     moment = moment,
                     onPlay = {
-                        player.play(moment.toEpisode(), moment.positionMs)
+                        player.play(moment.toEpisode(), startPositionMs = moment.positionMs)
                         player.expandSheet = true
                     },
                     onDelete = { LibraryStore.removeMoment(moment.id) },
