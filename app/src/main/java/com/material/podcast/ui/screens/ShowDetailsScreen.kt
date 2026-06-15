@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.material.podcast.ui.screens
 
@@ -20,6 +20,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
@@ -54,8 +56,10 @@ import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +73,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
@@ -80,6 +86,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -133,6 +140,14 @@ fun ShowDetailsScreen(
         if (url.isNullOrBlank()) return@LaunchedEffect
         val seed = extractArtworkColor(context, url)
         if (seed != null) artworkColorSeed = seed
+    }
+
+    // Track whether content has appeared for the artwork entrance animation
+    var artworkVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        if (uiState is ShowDetailsUiState.Success) {
+            artworkVisible = true
+        }
     }
 
     Scaffold(
@@ -207,6 +222,7 @@ fun ShowDetailsScreen(
                 listState = listState,
                 contentPadding = innerPadding,
                 artworkColorSeed = artworkColorSeed,
+                artworkVisible = artworkVisible,
                 onOpenAuthor = onOpenAuthor,
             )
         }
@@ -273,12 +289,37 @@ private fun SuccessContent(
     listState: LazyListState,
     contentPadding: PaddingValues,
     artworkColorSeed: Int = 0,
+    artworkVisible: Boolean = true,
     onOpenAuthor: (String) -> Unit,
+    onSearchGenre: (String) -> Unit = {},
 ) {
     val player = LocalPlayer.current
-    val context = LocalContext.current
     var following by remember(podcast.id) { mutableStateOf(LibraryStore.isFollowed(podcast.id)) }
     val resume = LibraryStore.resumeForPodcast(podcast.id)
+
+    // Episode search state
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val filteredEpisodes = remember(searchQuery, episodes) {
+        if (searchQuery.isBlank()) episodes
+        else episodes.filter {
+            it.title.contains(searchQuery, ignoreCase = true) ||
+            it.description.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    // Group episodes by year for sticky headers
+    val episodesByYear = remember(filteredEpisodes) {
+        filteredEpisodes.groupBy { ep ->
+            ep.publishedDate.take(4).toIntOrNull() ?: 0
+        }.entries.sortedByDescending { it.key }
+    }
+
+    // Listening stats: total ms listened for this podcast
+    val listenStats = remember { LibraryStore.getStats() }
+    val listenedMs = listenStats.perPodcast[podcast.id] ?: 0L
+    val listenedHours = listenedMs / 3_600_000L
 
     LazyColumn(
         state = listState,
@@ -289,7 +330,21 @@ private fun SuccessContent(
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         item(key = "header") {
-            PodcastHeader(podcast = podcast, artworkColorSeed = artworkColorSeed, onOpenAuthor = onOpenAuthor)
+            PodcastHeader(
+                podcast = podcast,
+                artworkColorSeed = artworkColorSeed,
+                artworkVisible = artworkVisible,
+                onOpenAuthor = onOpenAuthor,
+                onSearchGenre = onSearchGenre,
+            )
+        }
+
+        // Stats bar: latest date, episode count, rating
+        item(key = "stats_bar") {
+            StatsBar(
+                latestDate = episodes.firstOrNull()?.publishedDate.orEmpty(),
+                episodeCount = episodes.size,
+            )
         }
 
         item(key = "actions") {
@@ -325,6 +380,35 @@ private fun SuccessContent(
             }
         }
 
+        // Listening stats row
+        if (listenedMs > 0L) {
+            item(key = "listen_stats") {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("🎧", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = if (listenedHours > 0)
+                                "Bu podcastten $listenedHours saat dinledin"
+                            else
+                                "Bu podcastten az dinledin",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            }
+        }
+
         item(key = "ep_header") {
             SectionHeader(
                 title = "Bölümler",
@@ -333,26 +417,35 @@ private fun SuccessContent(
             )
         }
 
+        // Collapsible search bar
+        item(key = "ep_search") {
+            EpisodeSearchBar(
+                query = searchQuery,
+                expanded = searchExpanded,
+                onQueryChange = { searchQuery = it },
+                onExpandedChange = { searchExpanded = it },
+                onClear = { searchQuery = ""; searchExpanded = false },
+            )
+        }
+
         item(key = "divider_top") {
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
         }
 
-        items(episodes, key = { it.guid }) { episode ->
-            EpisodeListItem(
-                episode = episode,
-                onPlay = {
-                    player.play(episode, episodes)
-                    player.expandSheet = true
-                },
-                isDownloaded = LibraryStore.isDownloaded(episode.guid),
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
-        }
-
-        if (episodes.isEmpty()) {
+        if (filteredEpisodes.isEmpty() && searchQuery.isNotBlank()) {
+            item(key = "no_results") {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(48.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "\"$searchQuery\" için sonuç bulunamadı",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else if (episodesByYear.isEmpty()) {
             item(key = "empty") {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(48.dp),
@@ -365,12 +458,231 @@ private fun SuccessContent(
                     )
                 }
             }
+        } else {
+            episodesByYear.forEach { (year, yearEpisodes) ->
+                if (year > 0) {
+                    stickyHeader(key = "year_$year") {
+                        YearSectionHeader(year = year)
+                    }
+                }
+                items(yearEpisodes, key = { it.guid }) { episode ->
+                    EpisodeListItem(
+                        episode = episode,
+                        onPlay = {
+                            player.play(episode, episodes)
+                            player.expandSheet = true
+                        },
+                        isDownloaded = LibraryStore.isDownloaded(episode.guid),
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun PodcastHeader(podcast: Podcast, artworkColorSeed: Int, onOpenAuthor: (String) -> Unit) {
+private fun StatsBar(
+    latestDate: String,
+    episodeCount: Int,
+) {
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Latest episode date
+        StatCell(
+            label = "Son bölüm",
+            value = if (latestDate.isNotBlank()) latestDate.take(10) else "—",
+            emoji = "📅",
+            modifier = Modifier.weight(1f),
+        )
+
+        Box(
+            Modifier
+                .width(1.dp)
+                .height(32.dp)
+                .background(dividerColor)
+        )
+
+        // Episode count
+        StatCell(
+            label = "Bölüm sayısı",
+            value = "$episodeCount bölüm",
+            emoji = "🎙️",
+            modifier = Modifier.weight(1f),
+        )
+
+        Box(
+            Modifier
+                .width(1.dp)
+                .height(32.dp)
+                .background(dividerColor)
+        )
+
+        // Rating placeholder
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "⭐ 4.8",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    "Puan",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatCell(
+    label: String,
+    value: String,
+    emoji: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(emoji, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            value,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun YearSectionHeader(year: Int) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = year.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(8.dp))
+            HorizontalDivider(
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EpisodeSearchBar(
+    query: String,
+    expanded: Boolean,
+    onQueryChange: (String) -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
+    onClear: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(200)) + expandHorizontally(),
+            exit = fadeOut(tween(150)) + shrinkHorizontally(),
+            modifier = Modifier.weight(1f),
+        ) {
+            DockedSearchBar(
+                inputField = {
+                    SearchBarDefaults.InputField(
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        onSearch = {},
+                        expanded = false,
+                        onExpandedChange = {},
+                        placeholder = { Text("Bölüm ara…") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null, modifier = Modifier.size(18.dp)) },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { onQueryChange("") }) {
+                                    Icon(Icons.Rounded.Close, "Temizle", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                    )
+                },
+                expanded = false,
+                onExpandedChange = {},
+                modifier = Modifier.fillMaxWidth(),
+            ) {}
+        }
+
+        AnimatedVisibility(
+            visible = !expanded,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(100)),
+        ) {
+            IconButton(onClick = { onExpandedChange(true) }) {
+                Icon(Icons.Rounded.Search, "Bölüm ara", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(150)),
+        ) {
+            TextButton(onClick = onClear) {
+                Text("İptal")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PodcastHeader(
+    podcast: Podcast,
+    artworkColorSeed: Int,
+    artworkVisible: Boolean,
+    onOpenAuthor: (String) -> Unit,
+    onSearchGenre: (String) -> Unit = {},
+) {
     val baseScheme = MaterialTheme.colorScheme
     val isDark = baseScheme.surface.luminance() < 0.5f
     val tintTarget = if (artworkColorSeed != 0) {
@@ -396,11 +708,23 @@ private fun PodcastHeader(podcast: Podcast, artworkColorSeed: Int, onOpenAuthor:
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        PodcastArtwork(
-            imageUrl = podcast.artworkUrl,
-            shape = MaterialTheme.shapes.large,
-            modifier = Modifier.size(120.dp),
-        )
+        // Animated artwork entrance
+        AnimatedVisibility(
+            visible = artworkVisible,
+            enter = scaleIn(
+                initialScale = 0.85f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            ) + fadeIn(animationSpec = tween(300)),
+        ) {
+            PodcastArtwork(
+                imageUrl = podcast.artworkUrl,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.size(120.dp),
+            )
+        }
         Spacer(Modifier.width(18.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -421,10 +745,12 @@ private fun PodcastHeader(podcast: Podcast, artworkColorSeed: Int, onOpenAuthor:
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Clickable genre chip
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .clickable { onSearchGenre(podcast.genre) }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                     Text(

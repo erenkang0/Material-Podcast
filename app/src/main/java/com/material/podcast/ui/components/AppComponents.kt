@@ -72,14 +72,19 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -313,110 +318,177 @@ fun EpisodeListItem(
         )
     }
 
-    Column(
-        modifier = modifier.combinedClickable(
-            onClick = {},
-            onLongClick = {
+    // Swipe-to-play: end-to-start swipe triggers onPlay then resets
+    val swipeState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                showActionsSheet = true
-            },
-        ),
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(
-                    episode.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (isCurrentEpisode) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface,
-                )
-            },
-            supportingContent = {
-                Column {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "${episode.publishedDate} · ${episode.durationLabel}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                onPlay()
+                false // don't dismiss — snap back
+            } else {
+                false
+            }
+        },
+    )
+
+    // If it got stuck at EndToStart, snap it back after a short delay
+    LaunchedEffect(swipeState.currentValue) {
+        if (swipeState.currentValue == SwipeToDismissBoxValue.EndToStart) {
+            delay(300L)
+            swipeState.reset()
+        }
+    }
+
+    SwipeToDismissBox(
+        state = swipeState,
+        backgroundContent = {
+            val progress = swipeState.progress
+            val triggered = swipeState.targetValue == SwipeToDismissBoxValue.EndToStart
+            val bgAlpha = (progress * 3f).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.lerp(
+                            MaterialTheme.colorScheme.surface,
+                            Color(0xFF2E7D32), // deep green
+                            bgAlpha,
+                        )
                     )
-                    if (episode.description.isNotBlank()) {
-                        Spacer(Modifier.height(3.dp))
+                    .padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        contentDescription = "Oynat",
+                        tint = Color.White.copy(alpha = bgAlpha),
+                        modifier = Modifier.size(28.dp),
+                    )
+                    if (triggered) {
                         Text(
-                            episode.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
+                            "Oynat",
+                            color = Color.White.copy(alpha = bgAlpha),
+                            style = MaterialTheme.typography.labelLarge,
                         )
                     }
                 }
-            },
-            leadingContent = {
-                Box {
-                    PodcastArtwork(
-                        imageUrl = episode.artworkUrl,
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.size(56.dp),
+            }
+        },
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surface)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showActionsSheet = true
+                    },
+                ),
+        ) {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        episode.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isCurrentEpisode) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
                     )
-                    if (isCurrentEpisode && player.isPlaying) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(MaterialTheme.shapes.small)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            EqualizerBars(
-                                active = true,
-                                color = Color.White,
-                                modifier = Modifier.height(20.dp).width(22.dp),
+                },
+                supportingContent = {
+                    Column {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "${episode.publishedDate} · ${episode.durationLabel}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (episode.description.isNotBlank()) {
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                episode.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-                    if (isDownloaded && !isCurrentEpisode) {
-                        Box(
-                            modifier = Modifier
-                                .size(18.dp)
-                                .align(Alignment.BottomEnd)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Rounded.CheckCircle,
-                                "İndirildi",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(12.dp),
-                            )
+                },
+                leadingContent = {
+                    Box {
+                        PodcastArtwork(
+                            imageUrl = episode.artworkUrl,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.size(56.dp),
+                        )
+                        if (isCurrentEpisode && player.isPlaying) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(MaterialTheme.shapes.small)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                EqualizerBars(
+                                    active = true,
+                                    color = Color.White,
+                                    modifier = Modifier.height(20.dp).width(22.dp),
+                                )
+                            }
+                        }
+                        if (isDownloaded && !isCurrentEpisode) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.CheckCircle,
+                                    "İndirildi",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         }
                     }
-                }
-            },
-            trailingContent = {
-                FilledTonalIconButton(onClick = onPlay) {
-                    PlayPauseIcon(
-                        isPlaying = isCurrentEpisode && player.isPlaying,
-                        contentDescription = "Play",
-                    )
-                }
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
-        if (showProgress && progressFraction > 0f) {
-            LinearProgressIndicator(
-                progress = { progressFraction },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
+                },
+                trailingContent = {
+                    FilledTonalIconButton(onClick = onPlay) {
+                        PlayPauseIcon(
+                            isPlaying = isCurrentEpisode && player.isPlaying,
+                            contentDescription = "Play",
+                        )
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-        }
-        if (isCurrentEpisode) {
-            LinearProgressIndicator(
-                progress = { player.progress },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primaryContainer,
-            )
+            if (showProgress && progressFraction > 0f) {
+                LinearProgressIndicator(
+                    progress = { progressFraction },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
+                )
+            }
+            if (isCurrentEpisode) {
+                LinearProgressIndicator(
+                    progress = { player.progress },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primaryContainer,
+                )
+            }
         }
     }
 }
