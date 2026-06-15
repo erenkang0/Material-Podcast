@@ -25,6 +25,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Palette
@@ -69,6 +70,7 @@ fun LibraryScreen(
     onOpenSearch: () -> Unit,
     onOpenThemes: () -> Unit,
     onOpenSettings: () -> Unit = {},
+    onOpenStats: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
@@ -83,6 +85,9 @@ fun LibraryScreen(
                     Text("Kitaplığım", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 },
                 actions = {
+                    IconButton(onClick = onOpenStats) {
+                        Icon(Icons.Rounded.BarChart, "İstatistikler")
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Rounded.Settings, "Ayarlar")
                     }

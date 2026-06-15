@@ -8,9 +8,11 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.material.podcast.data.model.ExploreCategory
 import com.material.podcast.data.model.FavoriteMoment
+import com.material.podcast.data.model.ListenStats
 import com.material.podcast.data.model.Podcast
 import com.material.podcast.data.model.PodcastEpisode
 import com.material.podcast.data.model.ResumePoint
+import java.time.LocalDate
 
 /**
  * Single source of truth for everything the user keeps on-device: followed podcasts,
@@ -30,6 +32,7 @@ object LibraryStore {
     private const val KEY_RESUME = "resume"
     private const val KEY_RECENT = "recent"
     private const val KEY_CURRENT_QUEUE = "current_queue"
+    private const val KEY_STATS = "listen_stats"
 
     const val MAX_CATEGORIES = 10
     private const val MAX_RESUME = 40
@@ -55,6 +58,12 @@ object LibraryStore {
     val resumePoints: SnapshotStateList<ResumePoint> = mutableStateListOf()
     val recentPodcasts: SnapshotStateList<Podcast> = mutableStateListOf()
 
+    // Listening stats (in-memory accumulators, flushed to disk periodically).
+    private var statTotalMs = 0L
+    private val statPerPodcast = mutableMapOf<String, Long>()
+    private val statPerDay = mutableMapOf<String, Long>()
+    private val statTitles = mutableMapOf<String, String>()
+
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -68,6 +77,15 @@ object LibraryStore {
 
         val savedCategories = load(KEY_CATEGORIES, object : TypeToken<List<ExploreCategory>>() {})
         categories.addAll(savedCategories.ifEmpty { defaultCategories })
+
+        prefs.getString(KEY_STATS, null)?.let { json ->
+            runCatching { gson.fromJson(json, ListenStats::class.java) }.getOrNull()?.let { s ->
+                statTotalMs = s.totalMs
+                statPerPodcast.putAll(s.perPodcast)
+                statPerDay.putAll(s.perDay)
+                statTitles.putAll(s.titles)
+            }
+        }
     }
 
     private fun <T> load(key: String, type: TypeToken<List<T>>): List<T> {
@@ -207,6 +225,36 @@ object LibraryStore {
     fun setNotifyEnabled(podcastId: String, enabled: Boolean) {
         if (!::prefs.isInitialized) return
         prefs.edit().putBoolean("notify_$podcastId", enabled).apply()
+    }
+
+    // ---- Listening statistics ----------------------------------------------
+
+    /** Accumulate [deltaMs] of listening time for [episode] (in memory; call [flushStats] to persist). */
+    fun recordListen(deltaMs: Long, episode: PodcastEpisode) {
+        if (deltaMs <= 0L || deltaMs > 5_000L) return // guard against jumps / seeks
+        statTotalMs += deltaMs
+        val id = episode.podcastId.ifBlank { episode.podcastTitle }
+        statPerPodcast[id] = (statPerPodcast[id] ?: 0L) + deltaMs
+        if (episode.podcastTitle.isNotBlank()) statTitles[id] = episode.podcastTitle
+        val day = LocalDate.now().toString()
+        statPerDay[day] = (statPerDay[day] ?: 0L) + deltaMs
+    }
+
+    fun flushStats() {
+        if (!::prefs.isInitialized) return
+        val snapshot = ListenStats(statTotalMs, statPerPodcast.toMap(), statPerDay.toMap(), statTitles.toMap())
+        prefs.edit().putString(KEY_STATS, gson.toJson(snapshot)).apply()
+    }
+
+    fun getStats(): ListenStats =
+        ListenStats(statTotalMs, statPerPodcast.toMap(), statPerDay.toMap(), statTitles.toMap())
+
+    fun resetStats() {
+        statTotalMs = 0L
+        statPerPodcast.clear()
+        statPerDay.clear()
+        statTitles.clear()
+        flushStats()
     }
 
     // ---- Full JSON backup / restore ----------------------------------------

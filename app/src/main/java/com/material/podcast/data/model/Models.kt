@@ -85,6 +85,18 @@ data class ExploreCategory(
  * Where the user left off in an episode. Carries the whole episode so a "continue
  * listening" entry can be rendered and resumed from anywhere, plus when it was last touched.
  */
+/**
+ * Aggregate listening statistics, persisted on-device. Times are in milliseconds; maps are
+ * keyed by podcast id (with a parallel [titles] lookup) and by ISO date (yyyy-MM-dd).
+ */
+@Immutable
+data class ListenStats(
+    val totalMs: Long = 0L,
+    val perPodcast: Map<String, Long> = emptyMap(),
+    val perDay: Map<String, Long> = emptyMap(),
+    val titles: Map<String, String> = emptyMap(),
+)
+
 @Immutable
 data class ResumePoint(
     val episode: PodcastEpisode,

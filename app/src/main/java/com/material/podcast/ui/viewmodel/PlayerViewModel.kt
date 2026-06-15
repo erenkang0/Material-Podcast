@@ -72,6 +72,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingPlay: (() -> Unit)? = null
     private var sleepJob: Job? = null
     private var lastSavedAt: Long = 0L
+    private var lastStatsTickMs: Long = 0L
 
     private val downloadManager get() = EchoesApplication.instance.downloadManager
 
@@ -121,6 +122,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 if (ctrl != null && ctrl.isPlaying) {
                     updatePosition()
                     maybeSaveProgress()
+                    val now = System.currentTimeMillis()
+                    if (lastStatsTickMs > 0L) {
+                        nowPlaying?.let { LibraryStore.recordListen(now - lastStatsTickMs, it) }
+                    }
+                    lastStatsTickMs = now
+                } else {
+                    lastStatsTickMs = 0L
                 }
                 delay(250L)
             }
@@ -187,6 +195,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         if (now - lastSavedAt < 5_000L) return
         lastSavedAt = now
         LibraryStore.saveProgress(ep, positionMs, durationMs)
+        LibraryStore.flushStats()
     }
 
     private fun pushHistory(episode: PodcastEpisode) {
