@@ -24,7 +24,10 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -44,10 +47,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.material.podcast.data.model.Playlist
 import com.material.podcast.data.store.LibraryStore
+
+private enum class PlaylistSort { Alphabetical, CreationDate, EpisodeCount }
 
 @Composable
 fun PlaylistsScreen(
@@ -56,6 +64,8 @@ fun PlaylistsScreen(
 ) {
     val playlists = LibraryStore.playlists
     var showCreate by remember { mutableStateOf(false) }
+    var sortMode by remember { mutableStateOf(PlaylistSort.CreationDate) }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     if (showCreate) {
         CreatePlaylistDialog(
@@ -68,6 +78,14 @@ fun PlaylistsScreen(
         )
     }
 
+    val sortedPlaylists = remember(playlists.toList(), sortMode) {
+        when (sortMode) {
+            PlaylistSort.Alphabetical -> playlists.sortedBy { it.name.lowercase() }
+            PlaylistSort.CreationDate -> playlists.sortedByDescending { it.createdAt }
+            PlaylistSort.EpisodeCount -> playlists.sortedByDescending { it.episodes.size }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -75,6 +93,39 @@ fun PlaylistsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Geri")
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Icon(Icons.Rounded.Sort, contentDescription = "Sırala")
+                        }
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Ad") },
+                                onClick = { sortMode = PlaylistSort.Alphabetical; showSortMenu = false },
+                                leadingIcon = if (sortMode == PlaylistSort.Alphabetical) {
+                                    { Icon(Icons.Rounded.Sort, null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Oluşturma tarihi") },
+                                onClick = { sortMode = PlaylistSort.CreationDate; showSortMenu = false },
+                                leadingIcon = if (sortMode == PlaylistSort.CreationDate) {
+                                    { Icon(Icons.Rounded.Sort, null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Bölüm sayısı") },
+                                onClick = { sortMode = PlaylistSort.EpisodeCount; showSortMenu = false },
+                                leadingIcon = if (sortMode == PlaylistSort.EpisodeCount) {
+                                    { Icon(Icons.Rounded.Sort, null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                            )
+                        }
                     }
                 },
             )
@@ -126,7 +177,7 @@ fun PlaylistsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(playlists, key = { it.id }) { playlist ->
+                items(sortedPlaylists, key = { it.id }) { playlist ->
                     ElevatedCard(
                         onClick = { onOpenPlaylist(playlist.id) },
                         modifier = Modifier.fillMaxWidth(),
@@ -135,18 +186,10 @@ fun PlaylistsScreen(
                             Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.QueueMusic, null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
-                            }
+                            PlaylistArtworkCollage(
+                                playlist = playlist,
+                                modifier = Modifier.size(52.dp),
+                            )
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -167,6 +210,90 @@ fun PlaylistsScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistArtworkCollage(
+    playlist: Playlist,
+    modifier: Modifier = Modifier,
+) {
+    val artworks = playlist.episodes.take(4).map { it.artworkUrl }
+    Box(modifier = modifier.clip(MaterialTheme.shapes.medium)) {
+        if (artworks.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.QueueMusic, null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        } else if (artworks.size == 1) {
+            AsyncImage(
+                model = artworks[0],
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            // 2x2 grid collage
+            val quadrantSize = Modifier.fillMaxSize(0.5f)
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    AsyncImage(
+                        model = artworks[0],
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.weight(1f).fillMaxSize(),
+                    )
+                    if (artworks.size >= 2) {
+                        AsyncImage(
+                            model = artworks[1],
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.weight(1f).fillMaxSize(),
+                        )
+                    } else {
+                        Box(
+                            Modifier.weight(1f).fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                        )
+                    }
+                }
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    if (artworks.size >= 3) {
+                        AsyncImage(
+                            model = artworks[2],
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.weight(1f).fillMaxSize(),
+                        )
+                    } else {
+                        Box(
+                            Modifier.weight(1f).fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                        )
+                    }
+                    if (artworks.size >= 4) {
+                        AsyncImage(
+                            model = artworks[3],
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.weight(1f).fillMaxSize(),
+                        )
+                    } else {
+                        Box(
+                            Modifier.weight(1f).fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                        )
                     }
                 }
             }

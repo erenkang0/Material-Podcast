@@ -26,10 +26,12 @@ import androidx.compose.material.icons.rounded.DriveFileRenameOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -104,6 +106,11 @@ fun PlaylistDetailScreen(
 
     val episodes = playlist.episodes
 
+    // Compute total duration
+    val totalSeconds = episodes.sumOf { it.durationSeconds }
+    val totalHours = totalSeconds / 3600
+    val totalMinutes = (totalSeconds % 3600) / 60
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -171,6 +178,26 @@ fun PlaylistDetailScreen(
                         onMoveDown = { LibraryStore.movePlaylistEpisode(playlist.id, index, index + 1) },
                         onRemove = { LibraryStore.removeFromPlaylist(playlist.id, episode.guid) },
                     )
+                }
+
+                // ── Total duration footer ─────────────────────────────────────────
+                item(key = "footer") {
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    ) {
+                        val durationText = when {
+                            totalHours > 0 -> "Toplam: $totalHours saat ${totalMinutes} dk · ${episodes.size} bölüm"
+                            else -> "Toplam: ${totalMinutes} dk · ${episodes.size} bölüm"
+                        }
+                        Text(
+                            durationText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }
