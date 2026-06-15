@@ -113,6 +113,7 @@ class PodcastRepository {
                         podcastId = podcast.id,
                         podcastAuthor = podcast.author,
                         transcriptUrl = ep.transcriptUrl ?: "",
+                        chaptersUrl = ep.chaptersUrl ?: "",
                     )
                 }
                 episodeCache[podcast.id] = episodes
@@ -132,6 +133,21 @@ class PodcastRepository {
                     if (!response.isSuccessful) return@withContext emptyList()
                     val body = response.body?.string() ?: return@withContext emptyList()
                     com.material.podcast.data.rss.TranscriptParser.parse(body)
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+    suspend fun fetchChapters(url: String): List<com.material.podcast.data.model.Chapter> =
+        withContext(Dispatchers.IO) {
+            if (url.isBlank()) return@withContext emptyList()
+            try {
+                val request = Request.Builder().url(url).build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext emptyList()
+                    val body = response.body?.string() ?: return@withContext emptyList()
+                    com.material.podcast.data.rss.ChaptersParser.parse(body)
                 }
             } catch (e: Exception) {
                 emptyList()

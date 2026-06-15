@@ -35,6 +35,24 @@ object SettingsStore {
             .edit().putFloat(KEY_DEFAULT_SPEED, speed).apply()
     }
 
+    fun getEqPreset(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt("eq_preset", 0)
+
+    fun setEqPreset(context: Context, preset: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putInt("eq_preset", preset).apply()
+    }
+
+    fun isWifiOnlyDownload(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("wifi_only_download", false)
+
+    fun setWifiOnlyDownload(context: Context, value: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("wifi_only_download", value).apply()
+    }
+
     fun getTheme(context: Context): String =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString("theme", "Indigo|System") ?: "Indigo|System"

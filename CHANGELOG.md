@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.9-beta — 2026-06-15
+
+Four substantial new features.
+
+### 📑 Bölüm İşaretleri (Chapters)
+- Reads `<podcast:chapters>` (Podcast Namespace JSON) when a feed provides it.
+- A **chapter list screen** (with per-chapter artwork) opened from Now Playing; tap a chapter
+  to jump to it. The current chapter is highlighted and shown as a **chip** in the player.
+
+### 🎚️ Ekolayzer (Equalizer)
+- A 5-band **equalizer** with presets — **Konuşma · Bas · Tiz** (and off) — driven through the
+  playback service via an Android `Equalizer` audio effect.
+- Opened from Settings → Playback; the choice is persisted and re-applied on every session.
+
+### 📂 Çalma Listeleri (Custom Playlists)
+- Create, rename and delete **playlists** that mix episodes from any podcasts.
+- Add the current episode from Now Playing ("Çalma listesine ekle"); reorder with up/down and
+  **Tümünü oynat** plays the whole list as the queue.
+- Reached from a new icon in the Library top bar; included in JSON backup/restore.
+
+### ⬇️ Otomatik İndirme (Auto-download)
+- Toggle **auto-download of new episodes** per followed show (next to the notification bell).
+- A global **"yalnızca Wi-Fi'de"** option in Settings; new episodes are fetched in the
+  background by the existing periodic check.
+
+---
+
 ## v0.8-beta — 2026-06-15
 
 A visual overhaul of the library, discover and show screens, plus image/download fixes.

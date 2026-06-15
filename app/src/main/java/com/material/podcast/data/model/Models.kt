@@ -27,6 +27,7 @@ data class PodcastEpisode(
     val podcastId: String,
     val podcastAuthor: String = "",
     val transcriptUrl: String = "",
+    val chaptersUrl: String = "",
 ) {
     val durationLabel: String get() {
         val h = durationSeconds / 3600
@@ -89,6 +90,26 @@ data class ExploreCategory(
 /** One timed line of a transcript: [text] starting at [startMs] into the episode. */
 @Immutable
 data class TranscriptCue(val startMs: Long, val text: String)
+
+/** A single chapter marker within an episode (podcast namespace chapters). */
+@Immutable
+data class Chapter(
+    val startMs: Long,
+    val title: String,
+    val imageUrl: String = "",
+)
+
+/**
+ * A user-created playlist: an ordered mix of episodes from any podcasts. Persisted on-device
+ * in [com.material.podcast.data.store.LibraryStore].
+ */
+@Immutable
+data class Playlist(
+    val id: String,
+    val name: String,
+    val episodes: List<PodcastEpisode> = emptyList(),
+    val createdAt: Long = 0L,
+)
 
 /**
  * Aggregate listening statistics, persisted on-device. Times are in milliseconds; maps are

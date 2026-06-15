@@ -9,6 +9,7 @@ import com.google.gson.reflect.TypeToken
 import com.material.podcast.data.model.ExploreCategory
 import com.material.podcast.data.model.FavoriteMoment
 import com.material.podcast.data.model.ListenStats
+import com.material.podcast.data.model.Playlist
 import com.material.podcast.data.model.Podcast
 import com.material.podcast.data.model.PodcastEpisode
 import com.material.podcast.data.model.ResumePoint
@@ -33,6 +34,7 @@ object LibraryStore {
     private const val KEY_RECENT = "recent"
     private const val KEY_CURRENT_QUEUE = "current_queue"
     private const val KEY_STATS = "listen_stats"
+    private const val KEY_PLAYLISTS = "playlists"
 
     const val MAX_CATEGORIES = 10
     private const val MAX_RESUME = 40
@@ -57,6 +59,7 @@ object LibraryStore {
     val categories: SnapshotStateList<ExploreCategory> = mutableStateListOf()
     val resumePoints: SnapshotStateList<ResumePoint> = mutableStateListOf()
     val recentPodcasts: SnapshotStateList<Podcast> = mutableStateListOf()
+    val playlists: SnapshotStateList<Playlist> = mutableStateListOf()
 
     // Listening stats (in-memory accumulators, flushed to disk periodically).
     private var statTotalMs = 0L
@@ -74,6 +77,7 @@ object LibraryStore {
         downloads.addAll(load(KEY_DOWNLOADS, object : TypeToken<List<PodcastEpisode>>() {}))
         resumePoints.addAll(load(KEY_RESUME, object : TypeToken<List<ResumePoint>>() {}))
         recentPodcasts.addAll(load(KEY_RECENT, object : TypeToken<List<Podcast>>() {}))
+        playlists.addAll(load(KEY_PLAYLISTS, object : TypeToken<List<Playlist>>() {}))
 
         val savedCategories = load(KEY_CATEGORIES, object : TypeToken<List<ExploreCategory>>() {})
         categories.addAll(savedCategories.ifEmpty { defaultCategories })
@@ -227,6 +231,73 @@ object LibraryStore {
         prefs.edit().putBoolean("notify_$podcastId", enabled).apply()
     }
 
+    // ---- Custom playlists --------------------------------------------------
+
+    fun createPlaylist(name: String): Playlist {
+        val playlist = Playlist(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name.trim().ifBlank { "Çalma listesi" },
+            episodes = emptyList(),
+            createdAt = System.currentTimeMillis(),
+        )
+        playlists.add(0, playlist)
+        persist(KEY_PLAYLISTS, playlists)
+        return playlist
+    }
+
+    fun renamePlaylist(id: String, name: String) {
+        val idx = playlists.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        playlists[idx] = playlists[idx].copy(name = name.trim().ifBlank { playlists[idx].name })
+        persist(KEY_PLAYLISTS, playlists)
+    }
+
+    fun deletePlaylist(id: String) {
+        if (playlists.removeIf { it.id == id }) persist(KEY_PLAYLISTS, playlists)
+    }
+
+    fun playlistById(id: String): Playlist? = playlists.firstOrNull { it.id == id }
+
+    fun addToPlaylist(id: String, episode: PodcastEpisode) {
+        val idx = playlists.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        val current = playlists[idx]
+        if (current.episodes.any { it.guid == episode.guid }) return // no duplicates
+        playlists[idx] = current.copy(episodes = current.episodes + episode)
+        persist(KEY_PLAYLISTS, playlists)
+    }
+
+    fun removeFromPlaylist(id: String, guid: String) {
+        val idx = playlists.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        val current = playlists[idx]
+        playlists[idx] = current.copy(episodes = current.episodes.filterNot { it.guid == guid })
+        persist(KEY_PLAYLISTS, playlists)
+    }
+
+    /** Move the episode at [from] to [to] within playlist [id] (for manual reordering). */
+    fun movePlaylistEpisode(id: String, from: Int, to: Int) {
+        val idx = playlists.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        val list = playlists[idx].episodes.toMutableList()
+        if (from !in list.indices || to !in list.indices) return
+        list.add(to, list.removeAt(from))
+        playlists[idx] = playlists[idx].copy(episodes = list)
+        persist(KEY_PLAYLISTS, playlists)
+    }
+
+    // ---- Auto-download of new episodes -------------------------------------
+
+    fun isAutoDownloadEnabled(podcastId: String): Boolean {
+        if (!::prefs.isInitialized) return false
+        return prefs.getBoolean("autodl_$podcastId", false)
+    }
+
+    fun setAutoDownloadEnabled(podcastId: String, enabled: Boolean) {
+        if (!::prefs.isInitialized) return
+        prefs.edit().putBoolean("autodl_$podcastId", enabled).apply()
+    }
+
     // ---- Listening statistics ----------------------------------------------
 
     /** Accumulate [deltaMs] of listening time for [episode] (in memory; call [flushStats] to persist). */
@@ -270,6 +341,7 @@ object LibraryStore {
             KEY_CATEGORIES to categories.toList(),
             KEY_RESUME to resumePoints.toList(),
             KEY_RECENT to recentPodcasts.toList(),
+            KEY_PLAYLISTS to playlists.toList(),
         )
         return gson.toJson(snapshot)
     }
@@ -299,6 +371,8 @@ object LibraryStore {
                 section(KEY_RECENT, object : TypeToken<List<Podcast>>() {}))
             val cats = section(KEY_CATEGORIES, object : TypeToken<List<ExploreCategory>>() {})
             if (cats.isNotEmpty()) categories.replaceAllPersist(KEY_CATEGORIES, cats)
+            playlists.replaceAllPersist(KEY_PLAYLISTS,
+                section(KEY_PLAYLISTS, object : TypeToken<List<Playlist>>() {}))
             true
         } catch (_: Exception) {
             false

@@ -39,6 +39,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
@@ -107,6 +108,7 @@ fun LibraryScreen(
     onOpenThemes: () -> Unit,
     onOpenSettings: () -> Unit = {},
     onOpenStats: () -> Unit = {},
+    onOpenPlaylists: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
@@ -129,6 +131,9 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenPlaylists) {
+                        Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Çalma listeleri")
+                    }
                     IconButton(onClick = onOpenStats) {
                         Icon(Icons.Rounded.BarChart, "İstatistikler")
                     }

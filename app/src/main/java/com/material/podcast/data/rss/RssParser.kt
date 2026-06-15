@@ -24,6 +24,7 @@ class RssParser {
         var durationStr = ""
         var imageUrl: String? = null
         var transcriptUrl: String? = null
+        var chaptersUrl: String? = null
         var channelImageUrl: String? = null
         var inChannelImage = false
         var inItemImage = false
@@ -37,7 +38,7 @@ class RssParser {
                         inItem = true
                         guid = ""; title = ""; description = ""
                         enclosureUrl = ""; pubDate = ""; durationStr = ""
-                        imageUrl = null; transcriptUrl = null
+                        imageUrl = null; transcriptUrl = null; chaptersUrl = null
                     }
                     !inItem && tag == "image" -> inChannelImage = true
                     inItem && tag == "image" -> inItemImage = true
@@ -59,6 +60,10 @@ class RssParser {
                     inItem && tag == "guid" -> guid = safeNextText(parser)
                     inItem && tag == "itunes:image" -> {
                         imageUrl = parser.getAttributeValue(null, "href") ?: imageUrl
+                    }
+                    inItem && tag == "podcast:chapters" -> {
+                        val url = parser.getAttributeValue(null, "url")
+                        if (url != null && chaptersUrl == null) chaptersUrl = url
                     }
                     inItem && tag == "podcast:transcript" -> {
                         val url = parser.getAttributeValue(null, "url")
@@ -94,6 +99,7 @@ class RssParser {
                                     durationSeconds = parseDuration(durationStr),
                                     imageUrl = imageUrl ?: channelImageUrl,
                                     transcriptUrl = transcriptUrl,
+                                    chaptersUrl = chaptersUrl,
                                 )
                             )
                         }

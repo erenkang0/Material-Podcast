@@ -9,4 +9,5 @@ data class RssEpisode(
     val durationSeconds: Int,
     val imageUrl: String?,
     val transcriptUrl: String? = null,
+    val chaptersUrl: String? = null,
 )

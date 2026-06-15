@@ -49,12 +49,29 @@ class EpisodeCheckWorker(
                     if (LibraryStore.isNotifyEnabled(podcast.id)) {
                         notify(podcast.id.hashCode(), podcast.title, latest.title)
                     }
+                    // Auto-download the new episode if the user opted in for this show.
+                    if (LibraryStore.isAutoDownloadEnabled(podcast.id) && autoDownloadAllowed()) {
+                        EchoesApplication.instance.downloadManager.download(latest)
+                    }
                 }
             } catch (_: Exception) {
                 // Ignore a single feed failure; try again next cycle.
             }
         }
         return Result.success()
+    }
+
+    /** Honour the global "only on Wi-Fi" setting for auto-downloads. */
+    private fun autoDownloadAllowed(): Boolean {
+        if (!com.material.podcast.data.store.SettingsStore.isWifiOnlyDownload(applicationContext)) return true
+        return try {
+            val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+            !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+        } catch (_: Exception) {
+            true
+        }
     }
 
     private fun ensureChannel() {

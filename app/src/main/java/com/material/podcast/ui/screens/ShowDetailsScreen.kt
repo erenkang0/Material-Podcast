@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsActive
@@ -535,6 +536,19 @@ private fun ActionRow(
                         if (notify) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
                         "Yeni bölüm bildirimi",
                         tint = if (notify) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                var autoDl by remember(podcast.id) { mutableStateOf(LibraryStore.isAutoDownloadEnabled(podcast.id)) }
+                OutlinedIconButton(onClick = {
+                    autoDl = !autoDl
+                    LibraryStore.setAutoDownloadEnabled(podcast.id, autoDl)
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }) {
+                    Icon(
+                        if (autoDl) Icons.Rounded.DownloadForOffline else Icons.Rounded.DownloadForOffline,
+                        "Yeni bölümleri otomatik indir",
+                        tint = if (autoDl) MaterialTheme.colorScheme.primary
                                else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

@@ -18,8 +18,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.material.podcast.ui.screens.AuthorScreen
 import com.material.podcast.ui.screens.CategoryEditorScreen
+import com.material.podcast.ui.screens.ChaptersScreen
+import com.material.podcast.ui.screens.EqualizerScreen
 import com.material.podcast.ui.screens.HomeScreen
 import com.material.podcast.ui.screens.LibraryScreen
+import com.material.podcast.ui.screens.PlaylistDetailScreen
+import com.material.podcast.ui.screens.PlaylistsScreen
 import com.material.podcast.ui.screens.QueueScreen
 import com.material.podcast.ui.screens.SearchScreen
 import com.material.podcast.ui.screens.SettingsScreen
@@ -38,6 +42,12 @@ sealed class Screen(val route: String) {
     data object Queue : Screen("queue")
     data object Stats : Screen("stats")
     data object Transcript : Screen("transcript")
+    data object Chapters : Screen("chapters")
+    data object Equalizer : Screen("equalizer")
+    data object Playlists : Screen("playlists")
+    data object PlaylistDetail : Screen("playlist/{playlistId}") {
+        fun create(id: String) = "playlist/${id}"
+    }
     data object ShowDetails : Screen("show/{podcastId}") {
         fun create(id: String) = "show/${id}"
     }
@@ -90,11 +100,35 @@ fun AppNavHost(
                 onOpenThemes = onOpenThemes,
                 onOpenSettings = { navController.navigate(Screen.Settings.route) },
                 onOpenStats = { navController.navigate(Screen.Stats.route) },
+                onOpenPlaylists = { navController.navigate(Screen.Playlists.route) },
             )
         }
 
         composable(Screen.Queue.route) {
             QueueScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Chapters.route) {
+            ChaptersScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Equalizer.route) {
+            EqualizerScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Playlists.route) {
+            PlaylistsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPlaylist = { navController.navigate(Screen.PlaylistDetail.create(it)) },
+            )
+        }
+
+        composable(
+            route = Screen.PlaylistDetail.route,
+            arguments = listOf(navArgument("playlistId") { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString("playlistId") ?: return@composable
+            PlaylistDetailScreen(playlistId = id, onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Stats.route) {
@@ -106,7 +140,10 @@ fun AppNavHost(
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen(onOpenThemes = onOpenThemes)
+            SettingsScreen(
+                onOpenThemes = onOpenThemes,
+                onOpenEqualizer = { navController.navigate(Screen.Equalizer.route) },
+            )
         }
 
         composable(Screen.CategoryEditor.route) {

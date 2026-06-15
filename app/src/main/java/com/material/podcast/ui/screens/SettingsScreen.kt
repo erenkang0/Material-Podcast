@@ -27,10 +27,12 @@ import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -42,6 +44,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -63,11 +66,12 @@ import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.data.store.SettingsStore
 
 @Composable
-fun SettingsScreen(onOpenThemes: () -> Unit) {
+fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     var currentLang by remember { mutableStateOf(SettingsStore.getLanguage(context)) }
     var defaultSpeed by remember { mutableFloatStateOf(SettingsStore.getDefaultSpeed(context)) }
+    var wifiOnly by remember { mutableStateOf(SettingsStore.isWifiOnlyDownload(context)) }
     fun tr(turkish: String, english: String) = if (currentLang == "tr") turkish else english
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -173,6 +177,16 @@ fun SettingsScreen(onOpenThemes: () -> Unit) {
                             )
                         }
                     }
+                    HorizontalDivider()
+                    ListItem(
+                        headlineContent = { Text(tr("Ekolayzer", "Equalizer")) },
+                        supportingContent = { Text(tr("Ses tonu profilleri", "Audio tone profiles")) },
+                        leadingContent = { Icon(Icons.Rounded.GraphicEq, null) },
+                        trailingContent = {
+                            OutlinedButton(onClick = onOpenEqualizer) { Text(tr("Aç", "Open")) }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
                 }
             }
 
@@ -203,6 +217,25 @@ fun SettingsScreen(onOpenThemes: () -> Unit) {
                             Text(tr("Kurulumu tekrar çalıştır", "Re-run setup"))
                         }
                     }
+                    HorizontalDivider()
+                    ListItem(
+                        headlineContent = { Text(tr("Yalnızca Wi-Fi'de otomatik indir", "Auto-download on Wi-Fi only")) },
+                        supportingContent = {
+                            Text(tr("Yeni bölümleri sadece Wi-Fi varken otomatik indir",
+                                "Auto-download new episodes only on Wi-Fi"))
+                        },
+                        leadingContent = { Icon(Icons.Rounded.Wifi, null) },
+                        trailingContent = {
+                            Switch(
+                                checked = wifiOnly,
+                                onCheckedChange = {
+                                    wifiOnly = it
+                                    SettingsStore.setWifiOnlyDownload(context, it)
+                                },
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
                 }
             }
 

@@ -19,6 +19,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.material.podcast.EchoesApplication
+import com.material.podcast.data.model.Chapter
 import com.material.podcast.data.model.FavoriteMoment
 import com.material.podcast.data.model.PodcastEpisode
 import com.material.podcast.data.model.ResumePoint
@@ -62,6 +63,24 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var voiceBoost by mutableStateOf(false)
         private set
+    /** Index of the active equalizer preset (see [PlaybackService.EQ_PRESETS]); 0 = off. */
+    var eqPreset by mutableIntStateOf(0)
+        private set
+
+    /** Chapter markers for the current episode, empty if the feed provides none. */
+    val chapters = mutableStateListOf<Chapter>()
+    private var chaptersJob: Job? = null
+
+    /** Index of the chapter currently playing, or -1 if none. */
+    val currentChapterIndex: Int
+        get() {
+            if (chapters.isEmpty()) return -1
+            var idx = -1
+            for (i in chapters.indices) {
+                if (chapters[i].startMs <= positionMs) idx = i else break
+            }
+            return idx
+        }
 
     /** The active playlist (current podcast context); native next/previous walk this. */
     val queue = mutableStateListOf<PodcastEpisode>()
@@ -108,6 +127,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 controller = controllerFuture.get().also { ctrl ->
                     ctrl.addListener(listener)
                     playbackSpeed = ctrl.playbackParameters.speed
+                    // Re-apply the persisted equalizer preset to the (possibly fresh) session.
+                    val savedPreset = com.material.podcast.data.store.SettingsStore.getEqPreset(getApplication())
+                    eqPreset = savedPreset
+                    if (savedPreset != 0) {
+                        val args = android.os.Bundle().apply { putInt(PlaybackService.EXTRA_EQ_PRESET, savedPreset) }
+                        ctrl.sendCustomCommand(
+                            SessionCommand(PlaybackService.CMD_EQUALIZER, android.os.Bundle.EMPTY), args,
+                        )
+                    }
                     val pending = pendingPlay
                     if (pending != null) {
                         pending()
@@ -168,7 +196,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             nowPlaying = episode
             isLiked = LibraryStore.isLiked(episode.guid)
             updateArtworkColor(episode)
+            loadChapters(episode)
             pushHistory(episode)
+        }
+    }
+
+    private fun loadChapters(episode: PodcastEpisode) {
+        chaptersJob?.cancel()
+        chapters.clear()
+        if (episode.chaptersUrl.isBlank()) return
+        chaptersJob = viewModelScope.launch {
+            val result = EchoesApplication.instance.repository.fetchChapters(episode.chaptersUrl)
+            if (nowPlaying?.guid == episode.guid) {
+                chapters.clear()
+                chapters.addAll(result)
+            }
         }
     }
 
@@ -363,6 +405,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val ctrl = controller ?: return
         val args = android.os.Bundle().apply { putBoolean(PlaybackService.EXTRA_ENABLED, enabled) }
         ctrl.sendCustomCommand(SessionCommand(action, android.os.Bundle.EMPTY), args)
+    }
+
+    /** Jump straight to chapter [index]'s start time. */
+    fun seekToChapter(index: Int) {
+        val chapter = chapters.getOrNull(index) ?: return
+        seekToMs(chapter.startMs)
+    }
+
+    /** Apply equalizer preset [preset] (0 = off, see [PlaybackService.EQ_PRESETS]). */
+    fun setEqPreset(preset: Int) {
+        eqPreset = preset
+        val ctrl = controller ?: return
+        val args = android.os.Bundle().apply { putInt(PlaybackService.EXTRA_EQ_PRESET, preset) }
+        ctrl.sendCustomCommand(SessionCommand(PlaybackService.CMD_EQUALIZER, android.os.Bundle.EMPTY), args)
     }
 
     fun setSleepTimer(minutes: Int) {

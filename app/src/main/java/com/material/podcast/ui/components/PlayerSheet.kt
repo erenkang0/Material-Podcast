@@ -49,6 +49,8 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -273,6 +275,7 @@ fun FullPlayerSheet(
     onOpenAuthor: (String) -> Unit,
     onOpenQueue: () -> Unit,
     onOpenTranscript: () -> Unit,
+    onOpenChapters: () -> Unit = {},
 ) {
     val player = LocalPlayer.current
     player.nowPlaying ?: return
@@ -365,6 +368,7 @@ fun FullPlayerSheet(
                             onOpenAuthor = onOpenAuthor,
                             onOpenQueue = onOpenQueue,
                             onOpenTranscript = onOpenTranscript,
+                            onOpenChapters = onOpenChapters,
                         )
                     }
                 }
@@ -417,6 +421,7 @@ fun FullPlayerSheet(
                     onOpenAuthor = onOpenAuthor,
                     onOpenQueue = onOpenQueue,
                     onOpenTranscript = onOpenTranscript,
+                    onOpenChapters = onOpenChapters,
                 )
             }
         }
@@ -431,6 +436,7 @@ private fun FullPlayerContent(
     onOpenAuthor: (String) -> Unit,
     onOpenQueue: () -> Unit,
     onOpenTranscript: () -> Unit,
+    onOpenChapters: () -> Unit = {},
 ) {
     val episode = player.nowPlaying ?: return
 
@@ -460,7 +466,27 @@ private fun FullPlayerContent(
     var showAddMoment by remember { mutableStateOf(false) }
     var showSnip by remember { mutableStateOf(false) }
     var snipExporting by remember { mutableStateOf(false) }
+    var showAddToPlaylist by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (showAddToPlaylist) {
+        AddToPlaylistDialog(
+            onPick = { playlistId ->
+                LibraryStore.addToPlaylist(playlistId, episode)
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showAddToPlaylist = false
+                android.widget.Toast.makeText(context, "Çalma listesine eklendi", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            onCreate = { name ->
+                val pl = LibraryStore.createPlaylist(name)
+                LibraryStore.addToPlaylist(pl.id, episode)
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showAddToPlaylist = false
+                android.widget.Toast.makeText(context, "\"$name\" listesine eklendi", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showAddToPlaylist = false },
+        )
+    }
 
     if (showAddMoment) {
         AddMomentDialog(
@@ -530,7 +556,36 @@ private fun FullPlayerContent(
                 .aspectRatio(1f),
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
+
+        // Current chapter chip — tap to open the full chapter list.
+        if (player.chapters.isNotEmpty()) {
+            val chapterIdx = player.currentChapterIndex
+            val chapterTitle = player.chapters.getOrNull(chapterIdx)?.title
+            if (chapterTitle != null) {
+                Surface(
+                    onClick = onOpenChapters,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Rounded.FormatListBulleted, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            chapterTitle,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -784,6 +839,18 @@ private fun FullPlayerContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (player.chapters.isNotEmpty()) {
+                IconButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onOpenChapters()
+                }) {
+                    Icon(
+                        Icons.Rounded.FormatListBulleted,
+                        "Bölümler",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             if (episode.transcriptUrl.isNotBlank()) {
                 IconButton(onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -795,6 +862,15 @@ private fun FullPlayerContent(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+            IconButton(onClick = {
+                showAddToPlaylist = true
+            }) {
+                Icon(
+                    Icons.Rounded.PlaylistAdd,
+                    "Çalma listesine ekle",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             IconButton(onClick = {
                 showSleepTimer = !showSleepTimer
@@ -960,6 +1036,74 @@ private fun AddMomentDialog(
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(note) }) { Text("Kaydet") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("İptal") } },
+    )
+}
+
+@Composable
+private fun AddToPlaylistDialog(
+    onPick: (String) -> Unit,
+    onCreate: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val playlists = LibraryStore.playlists
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Çalma listesine ekle") },
+        text = {
+            Column {
+                if (creating) {
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        placeholder = { Text("Liste adı") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    if (playlists.isEmpty()) {
+                        Text(
+                            "Henüz çalma listen yok. Yeni bir tane oluştur.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                            items(playlists, key = { it.id }) { pl ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onPick(pl.id) }
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Rounded.QueueMusic, null, tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(pl.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            "${pl.episodes.size} bölüm",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (creating) {
+                TextButton(onClick = { onCreate(newName) }, enabled = newName.isNotBlank()) { Text("Oluştur ve ekle") }
+            } else {
+                TextButton(onClick = { creating = true }) { Text("Yeni liste") }
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("İptal") } },
     )
 }
