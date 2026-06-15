@@ -114,8 +114,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                         pendingPlay = null
                     } else if (ctrl.currentMediaItem != null && ctrl.playbackState != Player.STATE_IDLE) {
                         // Reconnecting to a session that is already playing (e.g. opened from the
-                        // notification after the UI process was recreated) — restore the UI state.
+                        // notification after the UI process was recreated) — restore the UI state
+                        // and make sure Now Playing is visible to the user.
                         restoreFromController(ctrl)
+                        expandSheet = true
                     }
                 }
             } catch (_: Exception) {}

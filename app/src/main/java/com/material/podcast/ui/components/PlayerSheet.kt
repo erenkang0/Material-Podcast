@@ -20,6 +20,10 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -275,6 +279,11 @@ fun FullPlayerSheet(
     val haptics = LocalHapticFeedback.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Track fullscreen state via a stable MutableState reference so pointerInput lambdas
+    // can read/write it without stale captures.
+    val fullscreenState = remember { mutableStateOf(false) }
+    var isFullscreen by fullscreenState
+
     // Dynamic surface derived from the cover, with a smooth wash when the track changes.
     val baseScheme = MaterialTheme.colorScheme
     val isDark = baseScheme.surface.luminance() < 0.5f
@@ -304,37 +313,112 @@ fun FullPlayerSheet(
         onSecondaryContainer = onBg,
     )
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = bg,
-        contentColor = onBg,
-        dragHandle = {
-            Box(
+    if (isFullscreen) {
+        // True full-screen: no sheet chrome, no drag handle, covers status bar.
+        Dialog(
+            onDismissRequest = { isFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center,
+                    .fillMaxSize()
+                    .pointerInput(fullscreenState) {
+                        // Swipe down anywhere to exit full-screen back to the sheet.
+                        var accY = 0f
+                        detectDragGestures(
+                            onDragStart = { accY = 0f },
+                            onDrag = { change, drag ->
+                                change.consume()
+                                accY += drag.y
+                            },
+                            onDragEnd = {
+                                if (accY > 80f) fullscreenState.value = false
+                                accY = 0f
+                            },
+                            onDragCancel = { accY = 0f },
+                        )
+                    },
+                color = bg,
+                contentColor = onBg,
             ) {
+                androidx.compose.material3.MaterialTheme(colorScheme = tinted) {
+                    Column(modifier = Modifier.statusBarsPadding()) {
+                        // Thin dismiss hint bar instead of a drag handle
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(onBg.copy(alpha = 0.15f)),
+                            )
+                        }
+                        FullPlayerContent(
+                            haptics = haptics,
+                            player = player,
+                            onOpenShow = onOpenShow,
+                            onOpenAuthor = onOpenAuthor,
+                            onOpenQueue = onOpenQueue,
+                            onOpenTranscript = onOpenTranscript,
+                        )
+                    }
+                }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = bg,
+            contentColor = onBg,
+            dragHandle = {
+                // Swipe up on the handle area to enter full-screen mode.
                 Box(
                     modifier = Modifier
-                        .width(36.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(onBg.copy(alpha = 0.3f)),
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .pointerInput(fullscreenState) {
+                            var accY = 0f
+                            detectDragGestures(
+                                onDragStart = { accY = 0f },
+                                onDrag = { change, drag ->
+                                    change.consume()
+                                    accY += drag.y
+                                },
+                                onDragEnd = {
+                                    if (accY < -24f) fullscreenState.value = true
+                                    accY = 0f
+                                },
+                                onDragCancel = { accY = 0f },
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(36.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(onBg.copy(alpha = 0.3f)),
+                    )
+                }
+            },
+        ) {
+            androidx.compose.material3.MaterialTheme(colorScheme = tinted) {
+                FullPlayerContent(
+                    haptics = haptics,
+                    player = player,
+                    onOpenShow = onOpenShow,
+                    onOpenAuthor = onOpenAuthor,
+                    onOpenQueue = onOpenQueue,
+                    onOpenTranscript = onOpenTranscript,
                 )
             }
-        },
-    ) {
-        androidx.compose.material3.MaterialTheme(colorScheme = tinted) {
-            FullPlayerContent(
-                haptics = haptics,
-                player = player,
-                onOpenShow = onOpenShow,
-                onOpenAuthor = onOpenAuthor,
-                onOpenQueue = onOpenQueue,
-                onOpenTranscript = onOpenTranscript,
-            )
         }
     }
 }
