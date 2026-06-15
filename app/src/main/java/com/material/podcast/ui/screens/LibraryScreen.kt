@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,14 +31,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.BarChart
@@ -48,15 +52,20 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.HeartBroken
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -65,11 +74,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,9 +94,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -115,6 +128,7 @@ fun LibraryScreen(
     val player = LocalPlayer.current
     val resume = LibraryStore.lastResume()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val followedCount = LibraryStore.followedPodcasts.size
 
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars,
@@ -122,12 +136,29 @@ fun LibraryScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Kitaplığım",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
+                            "Kütüphane",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
                         )
+                        if (followedCount > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .padding(horizontal = 10.dp, vertical = 3.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "$followedCount",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+                        }
                     }
                 },
                 actions = {
@@ -165,10 +196,30 @@ fun LibraryScreen(
                 )
             }
 
+            // Tab row with pill-shaped indicator using spring physics
             ScrollableTabRow(
                 selectedTabIndex = pagerState.currentPage,
                 edgePadding = 16.dp,
                 divider = {},
+                indicator = { tabPositions ->
+                    if (pagerState.currentPage < tabPositions.size) {
+                        val currentTabPosition = tabPositions[pagerState.currentPage]
+                        Box(
+                            Modifier
+                                .tabIndicatorOffset(currentTabPosition)
+                                .fillMaxWidth()
+                                .wrapContentSize(Alignment.BottomCenter)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.5f)
+                                    .height(3.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                            )
+                        }
+                    }
+                },
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
@@ -223,7 +274,7 @@ private fun SavedPodcastsTab(onOpenShow: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }, key = "header") {
+            item(span = { GridItemSpan(2) }, key = "header") {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -250,7 +301,7 @@ private fun LikedEpisodesTab() {
     val liked = LibraryStore.likedEpisodes
     if (liked.isEmpty()) {
         EmptyTabContent(
-            icon = Icons.Rounded.MusicNote,
+            icon = Icons.Rounded.FavoriteBorder,
             title = "Henüz beğenilen bölüm yok",
             subtitle = "Now Playing ekranında kalp simgesine dokunarak beğenin.",
         )
@@ -260,22 +311,175 @@ private fun LikedEpisodesTab() {
             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
         ) {
             items(liked, key = { it.guid }) { episode ->
-                Column {
-                    EpisodeListItem(
-                        episode = episode,
-                        onPlay = { player.play(episode); player.expandSheet = true },
+                LikedEpisodeItem(
+                    episode = episode,
+                    onPlay = { player.play(episode); player.expandSheet = true },
+                    onUnlike = { LibraryStore.toggleLike(episode) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LikedEpisodeItem(
+    episode: PodcastEpisode,
+    onPlay: () -> Unit,
+    onUnlike: () -> Unit,
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onUnlike()
+                true
+            } else false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            val color by animateColorAsState(
+                targetValue = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart)
+                    MaterialTheme.colorScheme.errorContainer
+                else Color.Transparent,
+                label = "swipe_bg",
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 4.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(color),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(end = 20.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.HeartBroken,
+                        contentDescription = "Beğeniyi kaldır",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(24.dp),
                     )
-                    if (LibraryStore.hasNotes(episode.guid)) {
-                        AssistChip(
-                            onClick = { },
-                            label = { Text("Notlu") },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Bookmark, null, Modifier.size(AssistChipDefaults.IconSize))
-                            },
-                            modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
+                    Text(
+                        "Kaldır",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        },
+    ) {
+        Column {
+            // Custom liked episode row with red heart badge on artwork
+            Surface(
+                onClick = onPlay,
+                color = Color.Transparent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Artwork with red heart badge overlaid bottom-right
+                    Box(modifier = Modifier.size(56.dp)) {
+                        PodcastArtwork(
+                            imageUrl = episode.artworkUrl,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.size(56.dp),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .align(Alignment.BottomEnd)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Rounded.Favorite,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            episode.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            episode.podcastTitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        // Date and duration on a single line
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (episode.publishedDate.isNotBlank()) {
+                                Text(
+                                    episode.publishedDate,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (episode.publishedDate.isNotBlank() && episode.durationLabel.isNotBlank()) {
+                                Text(
+                                    "·",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (episode.durationLabel.isNotBlank()) {
+                                Text(
+                                    episode.durationLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = onPlay,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.PlayArrow,
+                            contentDescription = "Oynat",
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
+            }
+            if (LibraryStore.hasNotes(episode.guid)) {
+                AssistChip(
+                    onClick = { },
+                    label = { Text("Notlu") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Bookmark, null, Modifier.size(AssistChipDefaults.IconSize))
+                    },
+                    modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
+                )
             }
         }
     }
@@ -320,6 +524,7 @@ private fun MomentRow(
     onDelete: () -> Unit,
 ) {
     ElevatedCard(
+        onClick = onPlay,
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
     ) {
@@ -327,12 +532,13 @@ private fun MomentRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
         ) {
+            // Artwork (48dp) on the left
             PodcastArtwork(
                 imageUrl = moment.artworkUrl,
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(48.dp),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -350,26 +556,33 @@ private fun MomentRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    "⏱ ${formatClock(moment.positionMs)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Spacer(Modifier.height(4.dp))
+                // Timestamp chip (mm:ss) in primaryContainer style
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        formatClock(moment.positionMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
                 if (moment.note.isNotBlank()) {
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         moment.note,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+                        maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             Spacer(Modifier.width(4.dp))
-            FilledTonalIconButton(onClick = onPlay, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Rounded.PlayArrow, "Bu andan oynat", modifier = Modifier.size(20.dp))
-            }
             IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Rounded.DeleteOutline, "Sil", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -390,6 +603,11 @@ private fun DownloadsTab() {
         downloads.groupBy { it.podcastId.ifBlank { it.podcastTitle } }
     }
 
+    // Calculate total downloaded size in MB
+    val totalSizeMb = remember(downloads.size) {
+        downloads.sumOf { dm.fileFor(it.guid).length() }.toFloat() / (1024f * 1024f)
+    }
+
     if (grouped.isEmpty()) {
         EmptyTabContent(
             icon = Icons.Rounded.CheckCircle,
@@ -407,6 +625,33 @@ private fun DownloadsTab() {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Total size banner
+            item(key = "size_banner") {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            "İndirilen bölümler",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "Toplam: ${"%.1f".format(totalSizeMb)} MB",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
             grouped.forEach { (podcastKey, episodes) ->
                 val firstEp = episodes.first()
                 val isExpanded = expanded[podcastKey] == true
@@ -590,6 +835,8 @@ private fun EmptyTabContent(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
+    ctaLabel: String? = null,
+    onCta: (() -> Unit)? = null,
 ) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(
@@ -598,21 +845,21 @@ private fun EmptyTabContent(
         ) {
             Box(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(80.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     icon, null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(40.dp),
                 )
             }
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -622,6 +869,11 @@ private fun EmptyTabContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            if (ctaLabel != null && onCta != null) {
+                FilledTonalButton(onClick = onCta) {
+                    Text(ctaLabel)
+                }
+            }
         }
     }
 }
@@ -631,5 +883,5 @@ private fun formatClock(ms: Long): String {
     val h = totalSec / 3600
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }

@@ -2,6 +2,7 @@
 
 package com.material.podcast.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -17,9 +18,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.window.Dialog
@@ -77,6 +80,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,6 +100,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.material.podcast.EchoesApplication
 import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.media.DownloadStatus
@@ -195,6 +201,31 @@ fun NowPlayingBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(contentAlignment = Alignment.Center) {
+                    // Pulsing glow behind artwork when playing
+                    val infiniteGlow = rememberInfiniteTransition(label = "glowPulse")
+                    val glowAlpha by infiniteGlow.animateFloat(
+                        initialValue = 0.0f,
+                        targetValue = if (player.isPlaying) 0.55f else 0.0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(900),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                        label = "glowAlpha",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .graphicsLayer {
+                                shadowElevation = if (player.isPlaying) 24f * glowAlpha else 0f
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                clip = false
+                                alpha = glowAlpha
+                            }
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = glowAlpha * 0.6f),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            ),
+                    )
                     PodcastArtwork(
                         imageUrl = episode.artworkUrl,
                         shape = MaterialTheme.shapes.medium,
@@ -345,7 +376,23 @@ fun FullPlayerSheet(
                 contentColor = onBg,
             ) {
                 androidx.compose.material3.MaterialTheme(colorScheme = tinted) {
-                    Column(modifier = Modifier.statusBarsPadding()) {
+                    // Immersive fullscreen: blurred/dimmed artwork fills the background
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val fsEpisode = player.nowPlaying
+                        if (fsEpisode != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                    .data(fsEpisode.artworkUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer { alpha = 0.15f },
+                            )
+                        }
+                        Column(modifier = Modifier.statusBarsPadding()) {
                         // Thin dismiss hint bar instead of a drag handle
                         Box(
                             modifier = Modifier
@@ -370,7 +417,8 @@ fun FullPlayerSheet(
                             onOpenTranscript = onOpenTranscript,
                             onOpenChapters = onOpenChapters,
                         )
-                    }
+                        } // end Column inside Box
+                    } // end Box (immersive bg)
                 }
             }
         }
@@ -463,6 +511,8 @@ private fun FullPlayerContent(
     }
 
     var showSleepTimer by remember { mutableStateOf(false) }
+    // Track the total sleep timer duration so we can show a countdown ring
+    var sleepTimerTotalMs by remember { mutableLongStateOf(0L) }
     var showAddMoment by remember { mutableStateOf(false) }
     var showSnip by remember { mutableStateOf(false) }
     var snipExporting by remember { mutableStateOf(false) }
@@ -587,31 +637,40 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(16.dp))
 
-        // Current chapter chip — tap to open the full chapter list.
+        // Current chapter chip with AnimatedContent cross-fade on chapter changes.
         if (player.chapters.isNotEmpty()) {
             val chapterIdx = player.currentChapterIndex
             val chapterTitle = player.chapters.getOrNull(chapterIdx)?.title
-            if (chapterTitle != null) {
-                Surface(
-                    onClick = onOpenChapters,
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            AnimatedContent(
+                targetState = chapterTitle,
+                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                label = "chapterChip",
+            ) { title ->
+                if (title != null) {
+                    Surface(
+                        onClick = onOpenChapters,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(bottom = 8.dp),
                     ) {
-                        Icon(Icons.Rounded.FormatListBulleted, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            chapterTitle,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.FormatListBulleted, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
+                } else {
+                    // Empty placeholder to keep layout stable
+                    Box(Modifier.height(0.dp))
                 }
             }
         }
@@ -723,7 +782,7 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // Speed slider — always visible above the button row
+        // Speed control — quick-pick chips + fine-tune slider
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -747,12 +806,55 @@ private fun FullPlayerContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // Speed quick-pick chips
+            val speedPresets = listOf(0.8f, 1.0f, 1.2f, 1.5f, 1.75f, 2.0f)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(speedPresets, key = { it }) { speed ->
+                    val label = when (speed) {
+                        1.0f -> "1×"
+                        else -> "${"%.2f".format(speed).trimEnd('0').trimEnd('.')}×"
+                    }
+                    val isSelected = kotlin.math.abs(player.playbackSpeed - speed) < 0.05f
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            player.setSpeed(speed)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                        leadingIcon = if (isSelected) {
+                            { Icon(Icons.Rounded.Check, null, Modifier.size(14.dp)) }
+                        } else null,
+                    )
+                }
+            }
             Slider(
                 value = player.playbackSpeed,
                 onValueChange = { player.setSpeed(it) },
                 onValueChangeFinished = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
                 valueRange = 0.5f..2.0f,
                 steps = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        // Mini stats row: duration · publish date · genre
+        val podcastGenre = remember(episode.podcastId) {
+            LibraryStore.followedPodcasts.find { it.id == episode.podcastId }?.genre.orEmpty()
+        }
+        val statParts = buildList {
+            if (episode.durationLabel.isNotBlank() && episode.durationSeconds > 0) add(episode.durationLabel)
+            if (episode.publishedDate.isNotBlank()) add(episode.publishedDate)
+            if (podcastGenre.isNotBlank()) add(podcastGenre)
+        }
+        if (statParts.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = statParts.joinToString("  ·  "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -848,6 +950,7 @@ private fun FullPlayerContent(
                                 FilterChip(
                                     selected = false,
                                     onClick = {
+                                        sleepTimerTotalMs = minutes * 60_000L
                                         player.setSleepTimer(minutes)
                                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         showSleepTimer = false
@@ -904,13 +1007,26 @@ private fun FullPlayerContent(
             IconButton(onClick = {
                 showSleepTimer = !showSleepTimer
             }) {
-                Icon(
-                    Icons.Rounded.Timer,
-                    "Uyku zamanlayıcı",
-                    tint = if (player.sleepTimerMs > 0 || player.sleepAtEnd || showSleepTimer)
-                        MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                val timerActive = player.sleepTimerMs > 0 || player.sleepAtEnd || showSleepTimer
+                Box(contentAlignment = Alignment.Center) {
+                    // Animated countdown ring when sleep timer is running
+                    if (player.sleepTimerMs > 0 && sleepTimerTotalMs > 0) {
+                        val timerProgress = (player.sleepTimerMs.toFloat() / sleepTimerTotalMs.toFloat()).coerceIn(0f, 1f)
+                        CircularProgressIndicator(
+                            progress = { timerProgress },
+                            modifier = Modifier.size(34.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        )
+                    }
+                    Icon(
+                        Icons.Rounded.Timer,
+                        "Uyku zamanlayıcı",
+                        tint = if (timerActive) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             IconButton(onClick = {
                 showSnip = true
@@ -1022,12 +1138,34 @@ private fun DownloadButton(episode: com.material.podcast.data.model.PodcastEpiso
                 Icons.Rounded.DownloadDone, "İndirildi (kaldırmak için dokun)",
                 tint = MaterialTheme.colorScheme.primary,
             )
-            state?.status == DownloadStatus.Downloading || state?.status == DownloadStatus.Queued -> CircularProgressIndicator(
-                progress = { if (state.status == DownloadStatus.Downloading) state.progress.coerceIn(0f, 1f) else 0f },
-                modifier = Modifier.size(22.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            state?.status == DownloadStatus.Downloading || state?.status == DownloadStatus.Queued -> {
+                val dlProgress = if (state.status == DownloadStatus.Downloading) state.progress.coerceIn(0f, 1f) else 0f
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp)) {
+                    // Filled background circle
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                    )
+                    // Progress ring on top
+                    CircularProgressIndicator(
+                        progress = { dlProgress },
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.secondaryContainer,
+                    )
+                    // Percentage text centered inside
+                    Text(
+                        "${(dlProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp)
+                        ),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            }
             else -> Icon(
                 Icons.Rounded.Download, "İndir",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
