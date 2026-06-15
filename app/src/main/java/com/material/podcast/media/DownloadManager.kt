@@ -75,7 +75,9 @@ class DownloadManager(private val appContext: Context) {
                 }
                 if (tmp.renameTo(target)) {
                     states[guid] = DownloadState(DownloadStatus.Completed, 1f)
-                    LibraryStore.addDownload(episode)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        LibraryStore.addDownload(episode)
+                    }
                 } else {
                     tmp.delete()
                     fail(guid)

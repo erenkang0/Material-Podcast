@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.Headphones
@@ -97,23 +99,26 @@ fun PodcastArtwork(
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     iconBg: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
-    if (imageUrl.isNotBlank()) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(imageUrl)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = modifier.clip(shape),
-        )
-    } else {
-        Box(
-            modifier = modifier
-                .clip(shape)
-                .background(iconBg),
-            contentAlignment = Alignment.Center,
-        ) {
+    // Always render the background so there's no layout shift / flash while Coil loads.
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(iconBg),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (imageUrl.isNotBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(250)
+                    .memoryCacheKey(imageUrl)
+                    .diskCacheKey(imageUrl)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(shape),
+            )
+        } else {
             Icon(fallbackIcon, contentDescription = null, tint = iconTint)
         }
     }
@@ -272,6 +277,7 @@ fun EpisodeListItem(
     modifier: Modifier = Modifier,
     showProgress: Boolean = false,
     progressFraction: Float = 0f,
+    isDownloaded: Boolean = false,
 ) {
     val player = LocalPlayer.current
     val isCurrentEpisode = player.nowPlaying?.guid == episode.guid
@@ -326,6 +332,23 @@ fun EpisodeListItem(
                                 active = true,
                                 color = Color.White,
                                 modifier = Modifier.height(20.dp).width(22.dp),
+                            )
+                        }
+                    }
+                    if (isDownloaded && !isCurrentEpisode) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .align(Alignment.BottomEnd)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Rounded.CheckCircle,
+                                "İndirildi",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(12.dp),
                             )
                         }
                     }

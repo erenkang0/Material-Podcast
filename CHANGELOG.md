@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.8-beta — 2026-06-15
+
+A visual overhaul of the library, discover and show screens, plus image/download fixes.
+
+### Library — redesigned
+- **New tabbed layout** with bold pinned top bar, icon-led empty states, and a podcast-count header.
+- **Downloads, Apple-Music style** — downloads now group by podcast into collapsible sections.
+  Each downloaded episode shows a **check tick** confirming it's offline; the current episode is
+  highlighted, non-current rows are calm/greyed.
+- **Favori Anlar** moments are now elevated cards with artwork, timestamp and note.
+
+### Discover (Keşfet) — new layout
+- A **16:9 hero card** for the top featured show with a gradient scrim and "Öne Çıkan" badge.
+- Tighter rails and a softer top gradient.
+
+### Show page
+- **Dynamic header tint** — the header is washed with a colour extracted from the podcast
+  artwork (deeper in dark theme, soft in light), animated in on load.
+- Episodes that are already downloaded show a **check badge** on their artwork.
+
+### Fixes
+- **Image loading jank** — artwork now renders its placeholder background immediately (no layout
+  shift / flash) and uses stable memory + disk cache keys, so covers don't re-decode while
+  scrolling.
+- **"İndirildi" not showing** — completing a download now updates the library list on the main
+  thread, so the downloaded state (and tick) appears immediately instead of after a restart.
+
+---
+
 ## v0.7-beta — 2026-06-15
 
 Five big additions, plus a calmer Home and a branded launch.

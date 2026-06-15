@@ -15,9 +15,11 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +79,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -95,6 +100,7 @@ import com.material.podcast.ui.components.EpisodeListItem
 import com.material.podcast.ui.components.PodcastArtwork
 import com.material.podcast.ui.components.ResumeHint
 import com.material.podcast.ui.components.SectionHeader
+import com.material.podcast.ui.theme.extractArtworkColor
 import com.material.podcast.ui.viewmodel.ShowDetailsUiState
 import com.material.podcast.ui.viewmodel.ShowDetailsViewModel
 
@@ -115,6 +121,14 @@ fun ShowDetailsScreen(
     var menuOpen by remember { mutableStateOf(false) }
 
     val podcast = (uiState as? ShowDetailsUiState.Success)?.podcast
+
+    var artworkColorSeed by remember(podcast?.id) { mutableStateOf(0) }
+    LaunchedEffect(podcast?.artworkUrl) {
+        val url = podcast?.artworkUrl
+        if (url.isNullOrBlank()) return@LaunchedEffect
+        val seed = extractArtworkColor(context, url)
+        if (seed != null) artworkColorSeed = seed
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -187,6 +201,7 @@ fun ShowDetailsScreen(
                 episodes = state.episodes,
                 listState = listState,
                 contentPadding = innerPadding,
+                artworkColorSeed = artworkColorSeed,
                 onOpenAuthor = onOpenAuthor,
             )
         }
@@ -252,6 +267,7 @@ private fun SuccessContent(
     episodes: List<PodcastEpisode>,
     listState: LazyListState,
     contentPadding: PaddingValues,
+    artworkColorSeed: Int = 0,
     onOpenAuthor: (String) -> Unit,
 ) {
     val player = LocalPlayer.current
@@ -268,7 +284,7 @@ private fun SuccessContent(
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         item(key = "header") {
-            PodcastHeader(podcast = podcast, onOpenAuthor = onOpenAuthor)
+            PodcastHeader(podcast = podcast, artworkColorSeed = artworkColorSeed, onOpenAuthor = onOpenAuthor)
         }
 
         item(key = "actions") {
@@ -323,6 +339,7 @@ private fun SuccessContent(
                     player.play(episode, episodes)
                     player.expandSheet = true
                 },
+                isDownloaded = LibraryStore.isDownloaded(episode.guid),
             )
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -348,7 +365,26 @@ private fun SuccessContent(
 }
 
 @Composable
-private fun PodcastHeader(podcast: Podcast, onOpenAuthor: (String) -> Unit) {
+private fun PodcastHeader(podcast: Podcast, artworkColorSeed: Int, onOpenAuthor: (String) -> Unit) {
+    val baseScheme = MaterialTheme.colorScheme
+    val isDark = baseScheme.surface.luminance() < 0.5f
+    val tintTarget = if (artworkColorSeed != 0) {
+        Color(artworkColorSeed).copy(alpha = if (isDark) 0.38f else 0.20f)
+    } else {
+        Color.Transparent
+    }
+    val animatedTint by animateColorAsState(tintTarget, tween(600), label = "headerTint")
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(animatedTint, Color.Transparent),
+                    endY = 420f,
+                ),
+            ),
+    ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -401,6 +437,7 @@ private fun PodcastHeader(podcast: Podcast, onOpenAuthor: (String) -> Unit) {
                 }
             }
         }
+    }
     }
 }
 
