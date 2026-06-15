@@ -34,4 +34,13 @@ object SettingsStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putFloat(KEY_DEFAULT_SPEED, speed).apply()
     }
+
+    fun getTheme(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("theme", "Indigo|System") ?: "Indigo|System"
+
+    fun setTheme(context: Context, value: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString("theme", value).apply()
+    }
 }

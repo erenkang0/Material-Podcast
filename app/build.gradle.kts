@@ -12,8 +12,8 @@ android {
         applicationId = "com.material.podcast"
         minSdk = 31
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5-beta"
+        versionCode = 6
+        versionName = "0.6-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -74,5 +74,8 @@ dependencies {
     implementation(libs.media3.session)
     // Coroutines
     implementation(libs.coroutines.android)
+    // Background work + splash
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.core.splashscreen)
     debugImplementation(libs.compose.ui.tooling)
 }

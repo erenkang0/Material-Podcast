@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,6 +68,7 @@ fun LibraryScreen(
     onOpenShow: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenThemes: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
@@ -81,6 +83,9 @@ fun LibraryScreen(
                     Text("Kitaplığım", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 },
                 actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Rounded.Settings, "Ayarlar")
+                    }
                     IconButton(onClick = onOpenThemes) {
                         Icon(Icons.Rounded.Palette, "Tema")
                     }

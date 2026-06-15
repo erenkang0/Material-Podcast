@@ -185,6 +185,30 @@ object LibraryStore {
     fun getCurrentQueue(): List<PodcastEpisode> =
         load(KEY_CURRENT_QUEUE, object : TypeToken<List<PodcastEpisode>>() {})
 
+    // ---- New-episode tracking (for push notifications) ---------------------
+
+    /** The latest episode GUID we've already notified the user about for [podcastId]. */
+    fun getLastKnownEpisodeGuid(podcastId: String): String? {
+        if (!::prefs.isInitialized) return null
+        return prefs.getString("last_episode_$podcastId", null)
+    }
+
+    fun setLastKnownEpisodeGuid(podcastId: String, guid: String) {
+        if (!::prefs.isInitialized) return
+        prefs.edit().putString("last_episode_$podcastId", guid).apply()
+    }
+
+    /** Whether to post new-episode notifications for [podcastId] (default on). */
+    fun isNotifyEnabled(podcastId: String): Boolean {
+        if (!::prefs.isInitialized) return true
+        return prefs.getBoolean("notify_$podcastId", true)
+    }
+
+    fun setNotifyEnabled(podcastId: String, enabled: Boolean) {
+        if (!::prefs.isInitialized) return
+        prefs.edit().putBoolean("notify_$podcastId", enabled).apply()
+    }
+
     // ---- Full JSON backup / restore ----------------------------------------
 
     /** Serialize the entire on-device library to a single JSON document. */

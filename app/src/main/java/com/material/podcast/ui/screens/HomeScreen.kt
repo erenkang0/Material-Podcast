@@ -2,6 +2,11 @@
 
 package com.material.podcast.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,10 +38,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -117,59 +126,99 @@ fun HomeScreen(
                 }
             }
 
-            is HomeUiState.Success -> LazyColumn(
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = 28.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            is HomeUiState.Success -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.05f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                            ),
+                            endY = 700f,
+                        ),
+                    ),
             ) {
-                if (resume != null) {
-                    item(key = "continue") {
-                        ContinueListeningCard(
-                            point = resume,
-                            onResume = { player.resume(resume); player.expandSheet = true },
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-
-                if (state.featured.isNotEmpty()) {
-                    item(key = "featured_header") {
-                        SectionHeader(title = "Öne Çıkanlar")
-                    }
-                    item(key = "featured_row") {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            items(state.featured, key = { it.id }) { podcast ->
-                                PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                LazyColumn(
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = 28.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (resume != null) {
+                        item(key = "continue") {
+                            Reveal(0) {
+                                ContinueListeningCard(
+                                    point = resume,
+                                    onResume = { player.resume(resume); player.expandSheet = true },
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                                )
                             }
                         }
                     }
-                }
 
-                state.sections.forEach { section ->
-                    item(key = "header_${section.category.id}") {
-                        SectionHeader(
-                            title = section.category.name,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
+                    if (state.featured.isNotEmpty()) {
+                        item(key = "featured_header") {
+                            Reveal(60) { SectionHeader(title = "Öne Çıkanlar") }
+                        }
+                        item(key = "featured_row") {
+                            Reveal(100) {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 20.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    items(state.featured, key = { it.id }) { podcast ->
+                                        PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                                    }
+                                }
+                            }
+                        }
                     }
-                    item(key = "row_${section.category.id}") {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
-                                PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+
+                    state.sections.forEachIndexed { index, section ->
+                        val delay = 140 + index * 80
+                        item(key = "header_${section.category.id}") {
+                            Reveal(delay) {
+                                SectionHeader(
+                                    title = section.category.name,
+                                    modifier = Modifier.padding(top = 12.dp),
+                                )
+                            }
+                        }
+                        item(key = "row_${section.category.id}") {
+                            Reveal(delay + 40) {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 20.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
+                                        PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** Fades + slides its content in once, after [delayMillis], for a staggered reveal. */
+@Composable
+private fun Reveal(delayMillis: Int, content: @Composable () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayMillis.toLong())
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 5 },
+    ) {
+        content()
     }
 }
 

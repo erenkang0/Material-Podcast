@@ -10,4 +10,15 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@android:color/white</item>
     </style>
+
+    <!--
+      Professional launch / splash screen via the AndroidX SplashScreen API. Shows a branded
+      background with the app icon while the process starts, then hands off to the real theme.
+    -->
+    <style name="Theme.EchoesSplash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#121318</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>
+        <item name="windowSplashScreenIconBackgroundColor">#121318</item>
+        <item name="postSplashScreenTheme">@style/Theme.MaterialPodcast</item>
+    </style>
 </resources>

@@ -6,8 +6,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.material.podcast.data.store.SettingsStore
+import com.material.podcast.media.EpisodeCheckWorker
 import com.material.podcast.ui.screens.SetupScreen
+import java.util.concurrent.TimeUnit
 import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -25,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -71,7 +76,13 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "episode_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<EpisodeCheckWorker>(2, TimeUnit.HOURS).build()
+        )
         enableEdgeToEdge()
         window.attributes.preferredRefreshRate = 120f
         setContent {
@@ -111,7 +122,6 @@ private fun PodcastApp(themeController: ThemeController) {
         NavItem(Screen.Home.route, stringResource(R.string.nav_home), Icons.Rounded.Home),
         NavItem(Screen.Search.route, stringResource(R.string.nav_search), Icons.Rounded.Search),
         NavItem(Screen.Library.route, stringResource(R.string.nav_library), Icons.Rounded.LibraryMusic),
-        NavItem(Screen.Settings.route, stringResource(R.string.nav_settings), Icons.Rounded.Settings),
     )
     val bottomBarRoutes = navItems.map { it.route }.toSet()
     val showBottomBar = currentRoute in bottomBarRoutes
@@ -196,6 +206,10 @@ private fun PodcastApp(themeController: ThemeController) {
             onOpenAuthor = { name ->
                 player.expandSheet = false
                 navController.navigate(Screen.Author.create(name))
+            },
+            onOpenQueue = {
+                player.expandSheet = false
+                navController.navigate(Screen.Queue.route)
             },
         )
     }

@@ -8,7 +8,7 @@
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-0.5--beta-6750A4?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.6--beta-6750A4?style=for-the-badge)
 ![Android](https://img.shields.io/badge/Android-7%2B%20·%20API%2031-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)

@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.material.podcast.data.store.SettingsStore
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
@@ -219,21 +220,33 @@ class ThemeController(
 val LocalThemeController = staticCompositionLocalOf { ThemeController() }
 
 @Composable
-fun rememberThemeController(): ThemeController =
-    rememberSaveable(
+fun rememberThemeController(): ThemeController {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val saved = remember { SettingsStore.getTheme(context) }
+    val controller = rememberSaveable(
         saver = androidx.compose.runtime.saveable.Saver(
             save = { "${it.color.name}|${it.darkMode.name}" },
             restore = {
                 val parts = it.split("|")
                 ThemeController(
-                    AppThemeColor.valueOf(parts[0]),
-                    DarkModeOption.valueOf(parts[1]),
+                    runCatching { AppThemeColor.valueOf(parts[0]) }.getOrDefault(AppThemeColor.Indigo),
+                    runCatching { DarkModeOption.valueOf(parts[1]) }.getOrDefault(DarkModeOption.System),
                 )
             }
         )
     ) {
-        ThemeController()
+        val parts = saved.split("|")
+        ThemeController(
+            runCatching { AppThemeColor.valueOf(parts[0]) }.getOrDefault(AppThemeColor.Indigo),
+            runCatching { DarkModeOption.valueOf(parts[1]) }.getOrDefault(DarkModeOption.System),
+        )
     }
+    // Persist whenever theme changes
+    androidx.compose.runtime.LaunchedEffect(controller.color, controller.darkMode) {
+        SettingsStore.setTheme(context, "${controller.color.name}|${controller.darkMode.name}")
+    }
+    return controller
+}
 
 /* ------------------------------------------------------------------------------------------------
  *  Animated scheme — every visible role cross-fades when the palette or light/dark mode changes,

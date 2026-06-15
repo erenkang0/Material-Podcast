@@ -20,6 +20,7 @@ import com.material.podcast.ui.screens.AuthorScreen
 import com.material.podcast.ui.screens.CategoryEditorScreen
 import com.material.podcast.ui.screens.HomeScreen
 import com.material.podcast.ui.screens.LibraryScreen
+import com.material.podcast.ui.screens.QueueScreen
 import com.material.podcast.ui.screens.SearchScreen
 import com.material.podcast.ui.screens.SettingsScreen
 import com.material.podcast.ui.screens.ShowDetailsScreen
@@ -32,6 +33,7 @@ sealed class Screen(val route: String) {
     data object Library : Screen("library")
     data object Settings : Screen("settings")
     data object CategoryEditor : Screen("category_editor")
+    data object Queue : Screen("queue")
     data object ShowDetails : Screen("show/{podcastId}") {
         fun create(id: String) = "show/${id}"
     }
@@ -82,7 +84,12 @@ fun AppNavHost(
                 onOpenShow = openShow,
                 onOpenSearch = { onSelectTab(Screen.Search.route) },
                 onOpenThemes = onOpenThemes,
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
             )
+        }
+
+        composable(Screen.Queue.route) {
+            QueueScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Settings.route) {

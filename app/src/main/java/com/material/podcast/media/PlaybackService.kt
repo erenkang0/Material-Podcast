@@ -2,6 +2,7 @@ package com.material.podcast.media
 
 import android.app.PendingIntent
 import android.content.Intent
+import androidx.media3.common.Player
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -29,6 +30,20 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+
+    /**
+     * When the user swipes the app away from recents and nothing is actively playing,
+     * tear the service down so audio doesn't linger. If something is still playing we keep
+     * going (that's the whole point of background playback).
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = session?.player
+        if (player == null || !player.playWhenReady || player.playbackState == Player.STATE_IDLE) {
+            player?.stop()
+            stopSelf()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         session?.run { player.release(); release() }

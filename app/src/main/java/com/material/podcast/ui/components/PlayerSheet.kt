@@ -44,6 +44,8 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -180,19 +182,29 @@ fun NowPlayingBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PodcastArtwork(
-                    imageUrl = episode.artworkUrl,
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.size(46.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    PodcastArtwork(
+                        imageUrl = episode.artworkUrl,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.size(48.dp),
+                    )
+                    if (player.isBuffering) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         episode.title,
                         style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -204,40 +216,44 @@ fun NowPlayingBar(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (player.isBuffering) {
-                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                } else {
-                    EqualizerBars(
-                        active = player.isPlaying,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(horizontal = 6.dp)
-                            .height(18.dp)
-                            .width(20.dp),
-                    )
-                    FilledIconButton(onClick = {
+                IconButton(
+                    onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        player.togglePlayPause()
-                    }) {
-                        PlayPauseIcon(player.isPlaying, if (player.isPlaying) "Duraklat" else "Oynat")
-                    }
+                        player.skipToPrevious()
+                    },
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.SkipPrevious, "Önceki",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                FilledIconButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    player.togglePlayPause()
+                }) {
+                    PlayPauseIcon(player.isPlaying, if (player.isPlaying) "Duraklat" else "Oynat")
+                }
+                IconButton(
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        player.skipToNext()
+                    },
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.SkipNext, "Sonraki",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
                 }
             }
             LinearProgressIndicator(
                 progress = { player.progress },
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .height(3.dp)
-                    .clip(CircleShape),
+                    .height(2.5.dp),
             )
         }
     }
@@ -248,6 +264,7 @@ fun FullPlayerSheet(
     onDismiss: () -> Unit,
     onOpenShow: (String) -> Unit,
     onOpenAuthor: (String) -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     val player = LocalPlayer.current
     player.nowPlaying ?: return
@@ -311,6 +328,7 @@ fun FullPlayerSheet(
                 player = player,
                 onOpenShow = onOpenShow,
                 onOpenAuthor = onOpenAuthor,
+                onOpenQueue = onOpenQueue,
             )
         }
     }
@@ -322,12 +340,18 @@ private fun FullPlayerContent(
     player: com.material.podcast.ui.viewmodel.PlayerViewModel,
     onOpenShow: (String) -> Unit,
     onOpenAuthor: (String) -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     val episode = player.nowPlaying ?: return
 
     var dragging by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
     val sliderValue = if (dragging) scrubValue else player.progress
+    val momentFractions = remember(episode.guid, player.durationMs) {
+        LibraryStore.moments
+            .filter { it.episodeGuid == episode.guid }
+            .map { it.positionMs.toFloat() / player.durationMs.coerceAtLeast(1L) }
+    }
 
     var lastTick by remember { mutableIntStateOf(-1) }
     LaunchedEffect(sliderValue, dragging) {
@@ -343,7 +367,6 @@ private fun FullPlayerContent(
     }
 
     var showSleepTimer by remember { mutableStateOf(false) }
-    var showQueue by remember { mutableStateOf(false) }
     var showAddMoment by remember { mutableStateOf(false) }
 
     if (showAddMoment) {
@@ -442,6 +465,7 @@ private fun FullPlayerContent(
             inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
             thumbColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier.fillMaxWidth(),
+            momentFractions = momentFractions,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             val posSec = if (dragging) (scrubValue * player.durationMs / 1000).toLong().toInt()
@@ -513,60 +537,6 @@ private fun FullPlayerContent(
                 steps = 5,
                 modifier = Modifier.fillMaxWidth(),
             )
-        }
-
-        // Queue panel — "Up next" from the current podcast + "Previously played"
-        AnimatedVisibility(
-            visible = showQueue,
-            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-        ) {
-            val upNext = player.upNext
-            val history = player.history
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Sıra", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { showQueue = false }) { Text("Kapat") }
-                }
-                LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
-                    item(key = "up_header") {
-                        QueueSubHeader("Sıradaki")
-                    }
-                    if (upNext.isEmpty()) {
-                        item(key = "up_empty") {
-                            Text(
-                                "Bu bölümden sonrası yok",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 6.dp),
-                            )
-                        }
-                    } else {
-                        items(upNext, key = { "up_${it.guid}" }) { ep ->
-                            QueueRow(ep, isCurrent = false) {
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                player.playQueueIndex(player.queue.indexOfFirst { q -> q.guid == ep.guid })
-                            }
-                        }
-                    }
-                    if (history.isNotEmpty()) {
-                        item(key = "hist_header") {
-                            QueueSubHeader("Önceki dinlediklerim")
-                        }
-                        items(history, key = { "hist_${it.guid}" }) { ep ->
-                            QueueRow(ep, isCurrent = ep.guid == player.nowPlaying?.guid) {
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                player.play(ep)
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-            }
         }
 
         // Sleep timer panel — expands above secondary controls
@@ -654,7 +624,6 @@ private fun FullPlayerContent(
         ) {
             IconButton(onClick = {
                 showSleepTimer = !showSleepTimer
-                if (showSleepTimer) showQueue = false
             }) {
                 Icon(
                     Icons.Rounded.Timer,
@@ -675,14 +644,13 @@ private fun FullPlayerContent(
             }
             DownloadButton(episode = episode)
             IconButton(onClick = {
-                showQueue = !showQueue
-                if (showQueue) showSleepTimer = false
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onOpenQueue()
             }) {
                 Icon(
                     Icons.Rounded.QueueMusic,
-                    "Sıra",
-                    tint = if (showQueue) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                    "Sıradakiler",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

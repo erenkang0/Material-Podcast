@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.6-beta — 2026-06-15
+
+### Now Playing
+- **Static seek bar with moment markers** — the wavy animation is gone; the timeline is now
+  a clean static bar with a dot for every saved note / favorite moment of the current episode.
+- **Restyled mini-player** — rounded artwork, bold title, previous / play-pause / next controls
+  and a flush bottom progress bar.
+- **Sıradakiler is its own screen** — the queue opens as a full screen (up next + history),
+  no longer an in-sheet panel.
+
+### Library & Following
+- **Animated follow button** — after following, the button confirms with "Takip ediliyor" for
+  3 seconds, then springs down into a compact check, alongside new **notification** and
+  **download** buttons on the show.
+- **New-episode notifications** — a periodic background check (WorkManager) notifies you when a
+  followed podcast releases a new episode; toggle per show.
+
+### Navigation & polish
+- **Settings moved off the nav bar** into the Library top bar; the bottom bar is now Home /
+  Search / Library.
+- **Launch splash screen** via the AndroidX SplashScreen API.
+- **Keşfet** gets a soft gradient backdrop and staggered fade/slide-in for its rows.
+
+### Fixes
+- **Theme persistence** — the selected palette / light-dark mode is now saved to
+  SharedPreferences and restored after the app is killed (previously only kept in the
+  transient saved-state bundle).
+- **Background audio** — when the app is swiped away from recents and nothing is playing, the
+  playback service now stops cleanly instead of lingering.
+
+---
+
 ## v0.5-beta — 2026-06-15
 
 ### Playback fixes

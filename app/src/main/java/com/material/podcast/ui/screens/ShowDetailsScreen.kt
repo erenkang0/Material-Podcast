@@ -8,6 +8,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -35,8 +40,12 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -58,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,8 +76,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -258,6 +271,8 @@ private fun SuccessContent(
 
         item(key = "actions") {
             ActionRow(
+                podcast = podcast,
+                latestEpisode = episodes.firstOrNull(),
                 following = following,
                 onPlay = {
                     val first = episodes.firstOrNull() ?: return@ActionRow
@@ -268,7 +283,6 @@ private fun SuccessContent(
                     following = !following
                     LibraryStore.toggleFollow(podcast)
                 },
-                onShare = { sharePodcast(context, podcast) },
             )
         }
 
@@ -390,11 +404,27 @@ private fun PodcastHeader(podcast: Podcast, onOpenAuthor: (String) -> Unit) {
 
 @Composable
 private fun ActionRow(
+    podcast: Podcast,
+    latestEpisode: PodcastEpisode?,
     following: Boolean,
     onPlay: () -> Unit,
     onFollowToggle: () -> Unit,
-    onShare: () -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
+
+    // After following, show "Takip ediliyor" for 3 seconds, then collapse to a compact icon.
+    var justFollowed by remember(podcast.id) { mutableStateOf(false) }
+    LaunchedEffect(following) {
+        if (following) {
+            justFollowed = true
+            delay(3000L)
+            justFollowed = false
+        } else {
+            justFollowed = false
+        }
+    }
+    val collapsed = following && !justFollowed
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -407,21 +437,86 @@ private fun ActionRow(
             Spacer(Modifier.width(6.dp))
             Text("Oynat")
         }
-        OutlinedButton(onClick = onFollowToggle, modifier = Modifier.weight(1f)) {
-            AnimatedContent(following, label = "follow") { isFollowing ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+        AnimatedContent(
+            targetState = collapsed,
+            transitionSpec = {
+                (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(initialScale = 0.7f))
+                    .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessMedium)) + scaleOut(targetScale = 0.7f))
+            },
+            label = "followCollapse",
+        ) { isCollapsed ->
+            if (isCollapsed) {
+                OutlinedIconButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onFollowToggle()
+                }) {
+                    Icon(Icons.Rounded.Check, "Takip ediliyor")
+                }
+            } else {
+                OutlinedButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onFollowToggle()
+                }) {
                     Icon(
-                        if (isFollowing) Icons.Rounded.Check else Icons.Rounded.Add,
+                        if (following) Icons.Rounded.Check else Icons.Rounded.Add,
                         null,
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(if (isFollowing) "Takip ediliyor" else "Takip et")
+                    Text(if (following) "Takip ediliyor" else "Takip et")
                 }
             }
         }
-        OutlinedIconButton(onClick = onShare) {
-            Icon(Icons.Rounded.IosShare, "Paylaş")
+
+        // New-episode notification toggle
+        var notify by remember(podcast.id) { mutableStateOf(LibraryStore.isNotifyEnabled(podcast.id)) }
+        OutlinedIconButton(onClick = {
+            notify = !notify
+            LibraryStore.setNotifyEnabled(podcast.id, notify)
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }) {
+            Icon(
+                if (notify) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
+                "Yeni bölüm bildirimi",
+                tint = if (notify) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Download the latest episode for offline listening
+        if (latestEpisode != null) {
+            ShowDownloadButton(episode = latestEpisode)
+        }
+    }
+}
+
+@Composable
+private fun ShowDownloadButton(episode: PodcastEpisode) {
+    val dm = com.material.podcast.EchoesApplication.instance.downloadManager
+    val haptics = LocalHapticFeedback.current
+    val downloaded = LibraryStore.isDownloaded(episode.guid)
+    val state = dm.states[episode.guid]
+    OutlinedIconButton(onClick = {
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        when {
+            downloaded -> dm.delete(episode.guid)
+            state?.status == com.material.podcast.media.DownloadStatus.Downloading -> {}
+            else -> dm.download(episode)
+        }
+    }) {
+        when {
+            downloaded -> Icon(
+                Icons.Rounded.DownloadDone, "İndirildi",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            state?.status == com.material.podcast.media.DownloadStatus.Downloading ->
+                CircularProgressIndicator(
+                    progress = { state.progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            else -> Icon(Icons.Rounded.Download, "Son bölümü indir")
         }
     }
 }
