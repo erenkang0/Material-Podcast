@@ -165,6 +165,22 @@ fun HomeScreen(
                         }
                     }
 
+                    if (state.recommended.isNotEmpty()) {
+                        item(key = "recommended_header") {
+                            SectionHeader(title = "Senin İçin")
+                        }
+                        item(key = "recommended_row") {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                items(state.recommended, key = { "rec_${it.id}" }) { podcast ->
+                                    PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                                }
+                            }
+                        }
+                    }
+
                     if (state.featured.isNotEmpty()) {
                         item(key = "featured_header") {
                             SectionHeader(title = "Öne Çıkanlar")
