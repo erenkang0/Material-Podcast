@@ -516,13 +516,42 @@ private fun FullPlayerContent(
         }
     }
 
+    var snipSeconds by remember { mutableIntStateOf(30) }
     if (showSnip) {
         AlertDialog(
             onDismissRequest = { showSnip = false },
             title = { Text("Snip oluştur") },
-            text = { Text("Şu ana kadar olan kısımdan kısa bir ses klibi paylaş.") },
-            confirmButton = { TextButton(onClick = { startSnip(60) }) { Text("Son 60 sn") } },
-            dismissButton = { TextButton(onClick = { startSnip(30) }) { Text("Son 30 sn") } },
+            text = {
+                Column {
+                    Text(
+                        "Şu anki konumdan önceki son ${snipSeconds}s paylaşılacak.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "${snipSeconds}s",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
+                    Slider(
+                        value = snipSeconds.toFloat(),
+                        onValueChange = { snipSeconds = it.toInt().coerceIn(5, 60) },
+                        valueRange = 5f..60f,
+                        steps = 10,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("5s", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("60s", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { startSnip(snipSeconds) }) { Text("Oluştur") }
+            },
+            dismissButton = { TextButton(onClick = { showSnip = false }) { Text("İptal") } },
         )
     }
 
@@ -984,7 +1013,7 @@ private fun DownloadButton(episode: com.material.podcast.data.model.PodcastEpiso
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         when {
             downloaded -> dm.delete(episode.guid)
-            state?.status == DownloadStatus.Downloading -> {} // already running
+            state?.status == DownloadStatus.Downloading || state?.status == DownloadStatus.Queued -> {} // already running
             else -> dm.download(episode)
         }
     }) {
@@ -993,8 +1022,8 @@ private fun DownloadButton(episode: com.material.podcast.data.model.PodcastEpiso
                 Icons.Rounded.DownloadDone, "İndirildi (kaldırmak için dokun)",
                 tint = MaterialTheme.colorScheme.primary,
             )
-            state?.status == DownloadStatus.Downloading -> CircularProgressIndicator(
-                progress = { state.progress.coerceIn(0f, 1f) },
+            state?.status == DownloadStatus.Downloading || state?.status == DownloadStatus.Queued -> CircularProgressIndicator(
+                progress = { if (state.status == DownloadStatus.Downloading) state.progress.coerceIn(0f, 1f) else 0f },
                 modifier = Modifier.size(22.dp),
                 strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.primary,
@@ -1041,7 +1070,7 @@ private fun AddMomentDialog(
 }
 
 @Composable
-private fun AddToPlaylistDialog(
+internal fun AddToPlaylistDialog(
     onPick: (String) -> Unit,
     onCreate: (String) -> Unit,
     onDismiss: () -> Unit,

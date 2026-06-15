@@ -1,7 +1,8 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.material.podcast.ui.components
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -16,8 +17,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,12 +43,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.ElevatedCard
@@ -53,18 +63,23 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,8 +95,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.material.podcast.EchoesApplication
 import com.material.podcast.data.model.Podcast
 import com.material.podcast.data.model.PodcastEpisode
+import com.material.podcast.data.store.LibraryStore
+import com.material.podcast.media.DownloadStatus
 import com.material.podcast.ui.LocalPlayer
 
 private val BounceSpring = spring<Float>(
@@ -280,8 +298,30 @@ fun EpisodeListItem(
     isDownloaded: Boolean = false,
 ) {
     val player = LocalPlayer.current
+    val haptics = LocalHapticFeedback.current
     val isCurrentEpisode = player.nowPlaying?.guid == episode.guid
-    Column(modifier) {
+    var showActionsSheet by remember { mutableStateOf(false) }
+
+    if (showActionsSheet) {
+        EpisodeActionsSheet(
+            episode = episode,
+            onPlay = {
+                onPlay()
+                showActionsSheet = false
+            },
+            onDismiss = { showActionsSheet = false },
+        )
+    }
+
+    Column(
+        modifier = modifier.combinedClickable(
+            onClick = {},
+            onLongClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showActionsSheet = true
+            },
+        ),
+    ) {
         ListItem(
             headlineContent = {
                 Text(
@@ -377,6 +417,147 @@ fun EpisodeListItem(
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.primaryContainer,
             )
+        }
+    }
+}
+
+@Composable
+private fun EpisodeActionsSheet(
+    episode: PodcastEpisode,
+    onPlay: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val player = LocalPlayer.current
+    val dm = EchoesApplication.instance.downloadManager
+    val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var isLiked by remember { mutableStateOf(LibraryStore.isLiked(episode.guid)) }
+    val downloaded = LibraryStore.isDownloaded(episode.guid)
+    val dlState = dm.states[episode.guid]
+    var showPlaylistPicker by remember { mutableStateOf(false) }
+
+    if (showPlaylistPicker) {
+        AddToPlaylistDialog(
+            onPick = { playlistId ->
+                LibraryStore.addToPlaylist(playlistId, episode)
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showPlaylistPicker = false
+                onDismiss()
+            },
+            onCreate = { name ->
+                val pl = LibraryStore.createPlaylist(name)
+                LibraryStore.addToPlaylist(pl.id, episode)
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showPlaylistPicker = false
+                onDismiss()
+            },
+            onDismiss = { showPlaylistPicker = false },
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(Modifier.navigationBarsPadding()) {
+            // Episode header
+            ListItem(
+                headlineContent = {
+                    Text(episode.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium)
+                },
+                supportingContent = {
+                    Text(episode.podcastTitle, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
+                leadingContent = {
+                    PodcastArtwork(imageUrl = episode.artworkUrl,
+                        shape = MaterialTheme.shapes.small, modifier = Modifier.size(48.dp))
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+
+            // Play
+            ListItem(
+                headlineContent = { Text("Oynat") },
+                leadingContent = { Icon(Icons.Rounded.PlayArrow, null, tint = MaterialTheme.colorScheme.onSurface) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onPlay()
+                },
+            )
+            // Like
+            ListItem(
+                headlineContent = { Text(if (isLiked) "Beğenildi" else "Beğen") },
+                leadingContent = {
+                    Icon(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        null,
+                        tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    isLiked = !isLiked
+                    LibraryStore.toggleLike(episode)
+                },
+            )
+            // Add to playlist
+            ListItem(
+                headlineContent = { Text("Çalma listesine ekle") },
+                leadingContent = { Icon(Icons.Rounded.PlaylistAdd, null, tint = MaterialTheme.colorScheme.onSurface) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    showPlaylistPicker = true
+                },
+            )
+            // Download / delete
+            val isDownloading = dlState?.status == DownloadStatus.Downloading
+            ListItem(
+                headlineContent = {
+                    Text(when {
+                        downloaded -> "İndirmeyi sil"
+                        isDownloading -> "İndiriliyor…"
+                        else -> "İndir"
+                    })
+                },
+                leadingContent = {
+                    Icon(
+                        if (downloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                        null,
+                        tint = if (downloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    when {
+                        downloaded -> dm.delete(episode.guid)
+                        !isDownloading -> dm.download(episode)
+                    }
+                    onDismiss()
+                },
+            )
+            // Share
+            ListItem(
+                headlineContent = { Text("Paylaş") },
+                leadingContent = { Icon(Icons.Rounded.Share, null, tint = MaterialTheme.colorScheme.onSurface) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "${episode.title}\n${episode.audioUrl}")
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Paylaş"))
+                    onDismiss()
+                },
+            )
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

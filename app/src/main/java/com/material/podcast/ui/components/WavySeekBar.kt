@@ -14,9 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+
+private const val SNAP_THRESHOLD = 0.018f  // 1.8% of total duration
 
 @Composable
 fun WavySeekBar(
@@ -32,12 +37,14 @@ fun WavySeekBar(
     momentFractions: List<Float> = emptyList(),
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     val activeStrokePx = with(density) { 3.5.dp.toPx() }
     val inactiveStrokePx = with(density) { 2.dp.toPx() }
     val thumbR = with(density) { 7.dp.toPx() }
     val dotR = with(density) { 3.dp.toPx() }
 
     var dragFrac by remember { mutableFloatStateOf(fraction) }
+    var lastSnappedFrac by remember { mutableFloatStateOf(-1f) }
 
     Canvas(
         modifier = modifier
@@ -46,15 +53,28 @@ fun WavySeekBar(
             .pointerInput(Unit) {
                 detectTapGestures { off -> onScrubFinished((off.x / size.width).coerceIn(0f, 1f)) }
             }
-            .pointerInput(Unit) {
+            .pointerInput(momentFractions) {
                 detectHorizontalDragGestures(
                     onDragStart = { off ->
+                        lastSnappedFrac = -1f
                         onScrubStart()
                         dragFrac = (off.x / size.width).coerceIn(0f, 1f)
                         onScrub(dragFrac)
                     },
                     onHorizontalDrag = { change, _ ->
-                        dragFrac = (change.position.x / size.width).coerceIn(0f, 1f)
+                        val raw = (change.position.x / size.width).coerceIn(0f, 1f)
+                        // Magnetic snap to nearby moment marker
+                        val snapped = momentFractions.firstOrNull { abs(it - raw) < SNAP_THRESHOLD }
+                        if (snapped != null) {
+                            if (snapped != lastSnappedFrac) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                lastSnappedFrac = snapped
+                            }
+                            dragFrac = snapped
+                        } else {
+                            lastSnappedFrac = -1f
+                            dragFrac = raw
+                        }
                         onScrub(dragFrac)
                     },
                     onDragEnd = { onScrubFinished(dragFrac) },

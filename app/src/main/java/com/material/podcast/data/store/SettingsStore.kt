@@ -61,4 +61,13 @@ object SettingsStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString("theme", value).apply()
     }
+
+    fun getNowPlayingGuid(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("now_playing_guid", "") ?: ""
+
+    fun setNowPlayingGuid(context: Context, guid: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString("now_playing_guid", guid).apply()
+    }
 }

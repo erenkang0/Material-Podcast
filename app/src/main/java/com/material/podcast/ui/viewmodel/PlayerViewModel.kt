@@ -122,6 +122,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        // Pre-populate queue/nowPlaying from persisted state so the mini player is visible
+        // immediately, before the MediaController finishes connecting asynchronously.
+        val savedQueue = LibraryStore.getCurrentQueue()
+        if (savedQueue.isNotEmpty()) {
+            queue.addAll(savedQueue)
+            val savedGuid = com.material.podcast.data.store.SettingsStore.getNowPlayingGuid(app)
+            nowPlaying = savedQueue.firstOrNull { it.guid == savedGuid } ?: savedQueue.firstOrNull()
+            nowPlaying?.let { isLiked = LibraryStore.isLiked(it.guid) }
+        }
+
         controllerFuture.addListener({
             try {
                 controller = controllerFuture.get().also { ctrl ->
@@ -198,6 +208,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             updateArtworkColor(episode)
             loadChapters(episode)
             pushHistory(episode)
+            com.material.podcast.data.store.SettingsStore.setNowPlayingGuid(getApplication(), episode.guid)
         }
     }
 
@@ -282,6 +293,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         pushHistory(episode)
         updateArtworkColor(episode)
         LibraryStore.saveCurrentQueue(list)
+        com.material.podcast.data.store.SettingsStore.setNowPlayingGuid(getApplication(), episode.guid)
 
         val action: () -> Unit = {
             val ctrl = controller

@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.0-beta — 2026-06-15
+
+### 🎨 Material You Dinamik Renk
+- Uygulama genelinde primary renk, çalan bölümün **kapak görseli**nden türetilir; podcast değişince akıcı geçiş.
+
+### 📋 Bölüm Uzun Basma Menüsü
+- Bölüm satırına **uzun basınca** bottom sheet açılır: Oynat · Beğen · Çalma listesine ekle · İndir/Sil · Paylaş.
+
+### 🎛️ Düzen ve Buton Hiyerarşisi
+- Podcast detay ekranında **Oynat** butonu tam genişlikte üste; **Takip Et** + bildirim/oto-indirme ikonları altında.
+- Bildirim ve oto-indirme butonlarına **uzun basınca Material 3 tooltip** gösterilir.
+- Oto-indirme ikonu duruma göre farklı (açık: DownloadForOffline, kapalı: Download).
+
+### ✂️ Snip Zaman Seçici
+- Snip diyalogunda sabit 30s/60s seçenekleri yerine **5–60 saniyelik kaydırıcı** (varsayılan 30s).
+
+### 🔒 Seek Bar Manyetik Hizalama
+- Seek bar kaydırılırken, başparmak bir favori ana 1.8% eşiğinde yaklaşınca mıknatıs gibi tutunur ve premium haptic tetiklenir.
+
+### 🔔 Detaylı İndirme Bildirimi
+- İndirme ilerlemesi sistem bildirimi ile izlenir: toplam boyut · eş zamanlı sayısı · sıradaki sayısı.
+- Aynı anda en fazla 3 indirme; kalanlar Queued (sırada) durumunda.
+
+### 🛠️ Mini Player Düzeltmesi
+- Sistem medya bildiriminden geri dönüldüğünde mini player anında görünür.
+
+---
+
 ## v0.9-beta — 2026-06-15
 
 Four substantial new features.

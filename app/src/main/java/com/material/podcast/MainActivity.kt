@@ -16,9 +16,11 @@ import com.material.podcast.ui.screens.SetupScreen
 import java.util.concurrent.TimeUnit
 import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -28,6 +30,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -120,6 +126,20 @@ private data class NavItem(val route: String, val label: String, val icon: Image
 @Composable
 private fun PodcastApp(themeController: ThemeController) {
     val player = LocalPlayer.current
+
+    // Material You: when a podcast is playing, blend the primary color toward the cover art seed.
+    val seed = player.artworkColorSeed
+    val baseScheme = MaterialTheme.colorScheme
+    val isDark = baseScheme.surface.luminance() < 0.5f
+    val blendFraction = if (isDark) 0.30f else 0.22f
+    val targetPrimary = if (seed != 0) lerp(baseScheme.primary, Color(seed), blendFraction) else baseScheme.primary
+    val targetContainer = if (seed != 0) lerp(baseScheme.primaryContainer, Color(seed).copy(alpha = 0.4f), 0.35f) else baseScheme.primaryContainer
+    val dynamicPrimary by animateColorAsState(targetPrimary, tween(700), label = "dynPrimary")
+    val dynamicContainer by animateColorAsState(targetContainer, tween(700), label = "dynContainer")
+    val dynamicScheme = if (seed != 0) baseScheme.copy(primary = dynamicPrimary, primaryContainer = dynamicContainer) else baseScheme
+
+    MaterialTheme(colorScheme = dynamicScheme) {
+
     val navController = rememberNavController()
     val backEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backEntry?.destination?.route
@@ -229,4 +249,6 @@ private fun PodcastApp(themeController: ThemeController) {
             },
         )
     }
+
+    } // end MaterialTheme(colorScheme = dynamicScheme)
 }

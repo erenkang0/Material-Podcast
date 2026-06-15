@@ -67,10 +67,14 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -471,89 +475,112 @@ private fun ActionRow(
     }
     val collapsed = following && !justFollowed
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FilledTonalButton(onClick = onPlay, modifier = Modifier.weight(1f)) {
+        // Play button — full width, scrollable with content
+        FilledTonalButton(onClick = onPlay, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(6.dp))
             Text("Oynat")
         }
 
-        AnimatedContent(
-            targetState = collapsed,
-            transitionSpec = {
-                (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(initialScale = 0.7f))
-                    .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessMedium)) + scaleOut(targetScale = 0.7f))
-            },
-            label = "followCollapse",
-        ) { isCollapsed ->
-            if (isCollapsed) {
-                OutlinedIconButton(onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onFollowToggle()
-                }) {
-                    Icon(Icons.Rounded.Check, "Takip ediliyor")
-                }
-            } else {
-                OutlinedButton(onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onFollowToggle()
-                }) {
-                    Icon(
-                        if (following) Icons.Rounded.Check else Icons.Rounded.Add,
-                        null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (following) "Takip ediliyor" else "Takip et")
+        // Follow row — animated collapse + notification/autodl icons
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AnimatedContent(
+                targetState = collapsed,
+                transitionSpec = {
+                    (fadeIn(spring(stiffness = Spring.StiffnessMedium)) + scaleIn(initialScale = 0.7f))
+                        .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessMedium)) + scaleOut(targetScale = 0.7f))
+                },
+                label = "followCollapse",
+                modifier = Modifier.weight(1f),
+            ) { isCollapsed ->
+                if (isCollapsed) {
+                    OutlinedIconButton(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onFollowToggle()
+                    }) {
+                        Icon(Icons.Rounded.Check, "Takip ediliyor")
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onFollowToggle()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            if (following) Icons.Rounded.Check else Icons.Rounded.Add,
+                            null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (following) "Takip ediliyor" else "Takip et")
+                    }
                 }
             }
-        }
 
-        // Notification + download buttons appear only once the show is followed (after the
-        // follow confirmation animation), sliding in next to the compact follow icon.
-        AnimatedVisibility(
-            visible = collapsed,
-            enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) + expandHorizontally(),
-            exit = fadeOut() + shrinkHorizontally(),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            // Notification + autodl + download — visible only after following
+            AnimatedVisibility(
+                visible = collapsed,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally(),
             ) {
-                var notify by remember(podcast.id) { mutableStateOf(LibraryStore.isNotifyEnabled(podcast.id)) }
-                OutlinedIconButton(onClick = {
-                    notify = !notify
-                    LibraryStore.setNotifyEnabled(podcast.id, notify)
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }) {
-                    Icon(
-                        if (notify) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
-                        "Yeni bölüm bildirimi",
-                        tint = if (notify) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                var autoDl by remember(podcast.id) { mutableStateOf(LibraryStore.isAutoDownloadEnabled(podcast.id)) }
-                OutlinedIconButton(onClick = {
-                    autoDl = !autoDl
-                    LibraryStore.setAutoDownloadEnabled(podcast.id, autoDl)
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }) {
-                    Icon(
-                        if (autoDl) Icons.Rounded.DownloadForOffline else Icons.Rounded.DownloadForOffline,
-                        "Yeni bölümleri otomatik indir",
-                        tint = if (autoDl) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (latestEpisode != null) {
-                    ShowDownloadButton(episode = latestEpisode)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    var notify by remember(podcast.id) { mutableStateOf(LibraryStore.isNotifyEnabled(podcast.id)) }
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Yeni bölüm bildirimi") } },
+                        state = rememberTooltipState(),
+                    ) {
+                        OutlinedIconButton(onClick = {
+                            notify = !notify
+                            LibraryStore.setNotifyEnabled(podcast.id, notify)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }) {
+                            Icon(
+                                if (notify) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
+                                "Yeni bölüm bildirimi",
+                                tint = if (notify) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    var autoDl by remember(podcast.id) { mutableStateOf(LibraryStore.isAutoDownloadEnabled(podcast.id)) }
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Yeni bölümleri otomatik indir") } },
+                        state = rememberTooltipState(),
+                    ) {
+                        OutlinedIconButton(onClick = {
+                            autoDl = !autoDl
+                            LibraryStore.setAutoDownloadEnabled(podcast.id, autoDl)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }) {
+                            Icon(
+                                if (autoDl) Icons.Rounded.DownloadForOffline else Icons.Rounded.Download,
+                                "Yeni bölümleri otomatik indir",
+                                tint = if (autoDl) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    if (latestEpisode != null) {
+                        ShowDownloadButton(episode = latestEpisode)
+                    }
                 }
             }
         }
@@ -570,7 +597,8 @@ private fun ShowDownloadButton(episode: PodcastEpisode) {
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         when {
             downloaded -> dm.delete(episode.guid)
-            state?.status == com.material.podcast.media.DownloadStatus.Downloading -> {}
+            state?.status == com.material.podcast.media.DownloadStatus.Downloading ||
+            state?.status == com.material.podcast.media.DownloadStatus.Queued -> {}
             else -> dm.download(episode)
         }
     }) {
@@ -579,7 +607,8 @@ private fun ShowDownloadButton(episode: PodcastEpisode) {
                 Icons.Rounded.DownloadDone, "İndirildi",
                 tint = MaterialTheme.colorScheme.primary,
             )
-            state?.status == com.material.podcast.media.DownloadStatus.Downloading ->
+            state?.status == com.material.podcast.media.DownloadStatus.Downloading ||
+            state?.status == com.material.podcast.media.DownloadStatus.Queued ->
                 CircularProgressIndicator(
                     progress = { state.progress.coerceIn(0f, 1f) },
                     modifier = Modifier.size(20.dp),
