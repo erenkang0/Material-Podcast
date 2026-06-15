@@ -414,7 +414,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Apply equalizer preset [preset] (0 = off, see [PlaybackService.EQ_PRESETS]). */
-    fun setEqPreset(preset: Int) {
+    fun applyEqPreset(preset: Int) {
         eqPreset = preset
         val ctrl = controller ?: return
         val args = android.os.Bundle().apply { putInt(PlaybackService.EXTRA_EQ_PRESET, preset) }

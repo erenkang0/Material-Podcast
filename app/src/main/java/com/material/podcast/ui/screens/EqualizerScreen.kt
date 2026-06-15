@@ -104,7 +104,7 @@ fun EqualizerScreen(onBack: () -> Unit) {
                     FilterChip(
                         selected = selected == index,
                         onClick = {
-                            player.setEqPreset(index)
+                            player.applyEqPreset(index)
                             SettingsStore.setEqPreset(context, index)
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         },
