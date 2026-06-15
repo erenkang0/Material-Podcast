@@ -2,13 +2,20 @@
 
 package com.material.podcast.ui.screens
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -18,18 +25,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -58,14 +71,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.material.podcast.data.model.ExploreCategory
 import com.material.podcast.data.model.Podcast
+import com.material.podcast.data.model.ResumePoint
 import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.ui.LocalPlayer
-import com.material.podcast.ui.components.ContinueListeningCard
 import com.material.podcast.ui.components.PodcastCard
 import com.material.podcast.ui.components.SectionHeader
 import com.material.podcast.ui.viewmodel.HomeUiState
 import com.material.podcast.ui.viewmodel.HomeViewModel
+import kotlinx.coroutines.delay
 import java.util.Calendar
 
 @Composable
@@ -85,8 +100,7 @@ fun HomeScreen(
 
     val resume = LibraryStore.lastResume()
 
-    // One calm, one-shot fade for the whole feed. Hoisted here (not per row) so scrolling
-    // away and back never re-triggers it.
+    // One calm, one-shot fade for the whole feed.
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
     val contentAlpha by animateFloatAsState(
@@ -94,6 +108,15 @@ fun HomeScreen(
         animationSpec = tween(420),
         label = "homeFade",
     )
+
+    val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val greetingText = remember(hour) {
+        when (hour) {
+            in 0..11 -> "Günaydın ☀️"
+            in 12..17 -> "İyi günler 🎧"
+            else -> "İyi akşamlar 🌙"
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -103,11 +126,10 @@ fun HomeScreen(
                 title = {
                     Column {
                         Text(
-                            text = greeting(),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = greetingText,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
                         )
-                        Text("Keşfet", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     }
                 },
                 actions = {
@@ -141,12 +163,17 @@ fun HomeScreen(
         ) {
             when (val state = uiState) {
                 is HomeUiState.Loading -> Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator() }
 
                 is HomeUiState.Error -> Box(
-                    Modifier.fillMaxSize().padding(innerPadding).padding(32.dp),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(32.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -177,7 +204,7 @@ fun HomeScreen(
                 ) {
                     if (resume != null) {
                         item(key = "continue") {
-                            ContinueListeningCard(
+                            HomeResumeCard(
                                 point = resume,
                                 onResume = { player.resume(resume); player.expandSheet = true },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -213,34 +240,50 @@ fun HomeScreen(
 
                     if (state.recommended.isNotEmpty()) {
                         item(key = "recommended_header") {
-                            SectionHeader(title = "Senin İçin")
+                            CategoryPillHeader(
+                                category = ExploreCategory(id = "rec", name = "Senin İçin", query = ""),
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
                         }
                         item(key = "recommended_row") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.recommended, key = { "rec_${it.id}" }) { podcast ->
-                                    PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                            StaggeredRow(index = 0) {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    items(state.recommended, key = { "rec_${it.id}" }) { podcast ->
+                                        ForYouPodcastCard(
+                                            podcast = podcast,
+                                            onClick = { onOpenShow(podcast.id) },
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    state.sections.forEach { section ->
+                    state.sections.forEachIndexed { index, section ->
                         item(key = "header_${section.category.id}") {
-                            SectionHeader(
-                                title = section.category.name,
+                            CategoryPillHeader(
+                                category = section.category,
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
                         item(key = "row_${section.category.id}") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
-                                    PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                            if (section.podcasts.isEmpty()) {
+                                EmptyStateShimmer(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            } else {
+                                StaggeredRow(index = index + 1) {
+                                    LazyRow(
+                                        contentPadding = PaddingValues(horizontal = 16.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
+                                            PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -251,6 +294,148 @@ fun HomeScreen(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Category pill header with colored initial-letter circle
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun CategoryPillHeader(
+    category: ExploreCategory,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Colored circle with first letter
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = category.name.firstOrNull()?.uppercase() ?: "?",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// "For You" podcast card with ✨ Senin için badge overlay
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ForYouPodcastCard(
+    podcast: Podcast,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        PodcastCard(podcast = podcast, onClick = onClick)
+        // Badge overlay in the top-left corner of the artwork inside the card
+        Box(
+            modifier = Modifier
+                .padding(start = 20.dp, top = 20.dp)
+                .clip(MaterialTheme.shapes.extraSmall)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f))
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+        ) {
+            Text(
+                text = "✨ Senin için",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Staggered entrance wrapper: fade + slide-up with per-index delay
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun StaggeredRow(
+    index: Int,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(index) {
+        delay(index * 80L)
+        visible = true
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        label = "rowAlpha_$index",
+    )
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) 0f else 32f,
+        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        label = "rowOffset_$index",
+    )
+    Box(
+        modifier = Modifier.graphicsLayer {
+            this.alpha = alpha
+            translationY = offsetY
+        },
+    ) {
+        content()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state with shimmer bars
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun EmptyStateShimmer(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shimmerAlpha",
+    )
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(0.75f, 0.55f, 0.40f).forEach { fraction ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .height(14.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha * 0.15f),
+                    ),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hero card with animated gradient pulse
+// ---------------------------------------------------------------------------
+
 @Composable
 private fun HeroFeaturedCard(
     podcast: Podcast,
@@ -258,6 +443,18 @@ private fun HeroFeaturedCard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+
+    val infiniteTransition = rememberInfiniteTransition(label = "heroPulse")
+    val gradientAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.40f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "heroGradientAlpha",
+    )
+
     ElevatedCard(
         onClick = onClick,
         shape = MaterialTheme.shapes.extraLarge,
@@ -276,6 +473,7 @@ private fun HeroFeaturedCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+            // Animated gradient overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -283,8 +481,8 @@ private fun HeroFeaturedCard(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.25f),
-                                Color.Black.copy(alpha = 0.75f),
+                                Color.Black.copy(alpha = gradientAlpha * 0.4f),
+                                Color.Black.copy(alpha = gradientAlpha),
                             ),
                         ),
                     ),
@@ -328,11 +526,80 @@ private fun HeroFeaturedCard(
     }
 }
 
-private fun greeting(): String {
-    return when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-        in 5..11 -> "Günaydın"
-        in 12..16 -> "İyi öğleden sonralar"
-        in 17..21 -> "İyi akşamlar"
-        else -> "İyi geceler"
+// ---------------------------------------------------------------------------
+// Redesigned "Continue Listening" card (Home-specific, full ElevatedCard layout)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun HomeResumeCard(
+    point: ResumePoint,
+    onResume: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ep = point.episode
+    val progressPercent = (point.fraction * 100).toInt()
+
+    ElevatedCard(
+        onClick = onResume,
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Left: 64dp artwork with rounded corners
+                coil.compose.AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(ep.artworkUrl)
+                        .crossfade(250)
+                        .memoryCacheKey(ep.artworkUrl)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(MaterialTheme.shapes.medium),
+                )
+                Spacer(Modifier.width(12.dp))
+                // Middle: episode info
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Kaldığın yerden devam et",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = ep.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${ep.podcastTitle} · %d%%".format(progressPercent),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                // Right: play button
+                FilledIconButton(onClick = onResume) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Devam et")
+                }
+            }
+            // Bottom: full-width progress indicator
+            LinearProgressIndicator(
+                progress = { point.fraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+            )
+        }
     }
 }
