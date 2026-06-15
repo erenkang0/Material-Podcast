@@ -2,10 +2,8 @@
 
 package com.material.podcast.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,8 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import kotlinx.coroutines.delay
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,6 +73,16 @@ fun HomeScreen(
     LaunchedEffect(categoriesKey) { vm.load(categories.toList()) }
 
     val resume = LibraryStore.lastResume()
+
+    // One calm, one-shot fade for the whole feed. Hoisted here (not per row) so scrolling
+    // away and back never re-triggers it.
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(420),
+        label = "homeFade",
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -129,14 +137,14 @@ fun HomeScreen(
             is HomeUiState.Success -> Box(
                 Modifier
                     .fillMaxSize()
+                    .graphicsLayer { alpha = contentAlpha }
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.05f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                                 MaterialTheme.colorScheme.background.copy(alpha = 0f),
                             ),
-                            endY = 700f,
+                            endY = 620f,
                         ),
                     ),
             ) {
@@ -149,53 +157,44 @@ fun HomeScreen(
                 ) {
                     if (resume != null) {
                         item(key = "continue") {
-                            Reveal(0) {
-                                ContinueListeningCard(
-                                    point = resume,
-                                    onResume = { player.resume(resume); player.expandSheet = true },
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                                )
-                            }
+                            ContinueListeningCard(
+                                point = resume,
+                                onResume = { player.resume(resume); player.expandSheet = true },
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                            )
                         }
                     }
 
                     if (state.featured.isNotEmpty()) {
                         item(key = "featured_header") {
-                            Reveal(60) { SectionHeader(title = "Öne Çıkanlar") }
+                            SectionHeader(title = "Öne Çıkanlar")
                         }
                         item(key = "featured_row") {
-                            Reveal(100) {
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 20.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                ) {
-                                    items(state.featured, key = { it.id }) { podcast ->
-                                        PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
-                                    }
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                items(state.featured, key = { it.id }) { podcast ->
+                                    PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
                                 }
                             }
                         }
                     }
 
-                    state.sections.forEachIndexed { index, section ->
-                        val delay = 140 + index * 80
+                    state.sections.forEach { section ->
                         item(key = "header_${section.category.id}") {
-                            Reveal(delay) {
-                                SectionHeader(
-                                    title = section.category.name,
-                                    modifier = Modifier.padding(top = 12.dp),
-                                )
-                            }
+                            SectionHeader(
+                                title = section.category.name,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
                         }
                         item(key = "row_${section.category.id}") {
-                            Reveal(delay + 40) {
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 20.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                ) {
-                                    items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
-                                        PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
-                                    }
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
+                                    PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
                                 }
                             }
                         }
@@ -203,22 +202,6 @@ fun HomeScreen(
                 }
             }
         }
-    }
-}
-
-/** Fades + slides its content in once, after [delayMillis], for a staggered reveal. */
-@Composable
-private fun Reveal(delayMillis: Int, content: @Composable () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayMillis.toLong())
-        visible = true
-    }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 5 },
-    ) {
-        content()
     }
 }
 

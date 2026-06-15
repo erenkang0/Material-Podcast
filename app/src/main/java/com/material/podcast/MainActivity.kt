@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,6 +59,7 @@ import com.material.podcast.navigation.Screen
 import com.material.podcast.ui.LocalPlayer
 import com.material.podcast.ui.components.FullPlayerSheet
 import com.material.podcast.ui.components.NowPlayingBar
+import com.material.podcast.ui.components.OpeningScreen
 import com.material.podcast.ui.components.ThemePickerSheet
 import com.material.podcast.ui.theme.EchoesTheme
 import com.material.podcast.ui.theme.ThemeController
@@ -89,17 +91,23 @@ class MainActivity : ComponentActivity() {
             val themeController = rememberThemeController()
             val playerVm: PlayerViewModel = viewModel()
             var onboarded by remember { mutableStateOf(SettingsStore.isOnboarded(this)) }
+            var showOpening by remember { mutableStateOf(true) }
             EchoesTheme(controller = themeController) {
-                if (!onboarded) {
-                    SetupScreen(onFinish = {
-                        SettingsStore.setOnboarded(this, true)
-                        onboarded = true
-                    })
-                } else {
-                    CompositionLocalProvider(LocalPlayer provides playerVm) {
-                        PodcastApp(
-                            themeController = themeController,
-                        )
+                Box(Modifier.fillMaxSize()) {
+                    if (!onboarded) {
+                        SetupScreen(onFinish = {
+                            SettingsStore.setOnboarded(this@MainActivity, true)
+                            onboarded = true
+                        })
+                    } else {
+                        CompositionLocalProvider(LocalPlayer provides playerVm) {
+                            PodcastApp(
+                                themeController = themeController,
+                            )
+                        }
+                    }
+                    if (showOpening) {
+                        OpeningScreen(onDone = { showOpening = false })
                     }
                 }
             }
