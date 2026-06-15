@@ -201,6 +201,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         lastSavedAt = now
         LibraryStore.saveProgress(ep, positionMs, durationMs)
         LibraryStore.flushStats()
+        com.material.podcast.media.NowPlayingWidget.refresh(getApplication())
     }
 
     private fun pushHistory(episode: PodcastEpisode) {
