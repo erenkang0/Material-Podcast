@@ -2,6 +2,7 @@ package com.material.podcast.ui.components
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -95,7 +97,7 @@ fun WavySeekBar(
                 moveTo(0f, centerY)
                 var x = 0f
                 while (x <= thumbX) {
-                    val y = centerY + amplitude * waveAmpPx * sin((x / 26f) + phase)
+                    val y = centerY + amplitude * waveAmpPx * sin(((x / 26f) + phase).toDouble()).toFloat()
                     lineTo(x, y)
                     x += 3f
                 }

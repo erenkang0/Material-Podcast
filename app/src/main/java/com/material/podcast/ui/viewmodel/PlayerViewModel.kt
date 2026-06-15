@@ -224,8 +224,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         updateArtworkColor(episode)
         LibraryStore.saveCurrentQueue(list)
 
-        val action = {
-            controller?.let { ctrl ->
+        val action: () -> Unit = {
+            val ctrl = controller
+            if (ctrl != null) {
                 val items = list.map(::toMediaItem)
                 ctrl.setMediaItems(items, startIndex, startPositionMs)
                 ctrl.prepare()
