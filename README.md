@@ -74,3 +74,7 @@ as matched `lightColorScheme` / `darkColorScheme` pairs. To add another, add an
 entry to the `AppThemeColor` enum with a swatch and its two schemes — it shows
 up in the theme sheet automatically and retints the entire app through the
 standard color roles.
+
+## Credits
+
+Built by **Erenkang0** & **Claude** (Anthropic).

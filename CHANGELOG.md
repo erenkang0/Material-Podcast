@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.5-beta — 2026-06-15
+
+### Playback fixes
+- **Now Playing awareness** — opening the app from the notification or mini-bar after the
+  process was recreated now restores the playing episode and queue (the UI no longer loses
+  track of what's playing).
+- **Real next / previous** — playing from a show loads the show's episodes as the queue, so
+  the transport's next/previous walk actual episodes.
+- **Queue panel** — now shows **Sıradaki** (upcoming episodes of the current show) and
+  **Önceki dinlediklerim** (history); every row is tappable.
+
+### Now Playing UI
+- **Wavy progress** — Material-3-expressive style animated wavy seek bar (drag or tap to
+  scrub); the static slider and the cover-art breathing animation are gone.
+- **Sleep timer** — horizontally scrollable; first option is **Bölüm bitince** (stop when the
+  episode ends), then 5–90 minutes.
+- Haptics added across the new controls.
+
+### First-run setup
+- A welcome / onboarding flow walks through notifications and **disabling battery
+  optimization** so playback isn't killed in the background. Re-runnable from Settings.
+
+### Settings
+- Redesigned with cards; a **Background** section (battery, re-run setup) and a **Backup**
+  section to **export / import the whole library as JSON**.
+
+### Performance
+- Theme switching is now applied instantly instead of animating ~25 color roles at the root
+  every frame, removing the jank when changing palette / light-dark.
+
+---
+
 ## v0.4-beta — 2026-06-15
 
 ### On-device library (never deleted)

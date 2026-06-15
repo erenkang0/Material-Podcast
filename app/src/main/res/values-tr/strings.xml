@@ -20,7 +20,6 @@
     <string name="settings_version">Sürüm</string>
     <string name="settings_open_source">Açık Kaynak</string>
     <string name="settings_open_source_sub">Kotlin · Jetpack Compose · Material 3 ile yapıldı</string>
-    <string name="settings_made_with">Claude · Anthropic ile geliştirildi</string>
 
     <!-- Language options -->
     <string name="lang_english">İngilizce</string>

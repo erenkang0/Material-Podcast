@@ -20,7 +20,6 @@
     <string name="settings_version">Version</string>
     <string name="settings_open_source">Open Source</string>
     <string name="settings_open_source_sub">Built with Kotlin · Jetpack Compose · Material 3</string>
-    <string name="settings_made_with">Made with Claude · Anthropic</string>
 
     <!-- Language options -->
     <string name="lang_english">English</string>

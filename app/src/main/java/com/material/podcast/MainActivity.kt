@@ -1,17 +1,13 @@
 package com.material.podcast
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.material.podcast.data.store.SettingsStore
+import com.material.podcast.ui.screens.SetupScreen
 import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -78,24 +74,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         window.attributes.preferredRefreshRate = 120f
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    0,
-                )
-            }
-        }
         setContent {
             val themeController = rememberThemeController()
             val playerVm: PlayerViewModel = viewModel()
+            var onboarded by remember { mutableStateOf(SettingsStore.isOnboarded(this)) }
             EchoesTheme(controller = themeController) {
-                CompositionLocalProvider(LocalPlayer provides playerVm) {
-                    PodcastApp(
-                        themeController = themeController,
-                    )
+                if (!onboarded) {
+                    SetupScreen(onFinish = {
+                        SettingsStore.setOnboarded(this, true)
+                        onboarded = true
+                    })
+                } else {
+                    CompositionLocalProvider(LocalPlayer provides playerVm) {
+                        PodcastApp(
+                            themeController = themeController,
+                        )
+                    }
                 }
             }
         }

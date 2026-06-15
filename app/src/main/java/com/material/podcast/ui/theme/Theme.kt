@@ -317,8 +317,9 @@ fun EchoesTheme(
         DarkModeOption.Light -> false
         DarkModeOption.Dark -> true
     }
-    val target = if (darkTheme) controller.color.dark else controller.color.light
-    val colorScheme = animatedColorScheme(target, darkTheme)
+    // Apply the scheme directly (instant). Animating ~25 color roles at the root recomposed
+    // the entire tree every frame during a switch, which caused visible jank.
+    val colorScheme = if (darkTheme) controller.color.dark else controller.color.light
 
     val view = LocalView.current
     if (!view.isInEditMode) {
