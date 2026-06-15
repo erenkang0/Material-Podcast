@@ -8,4 +8,5 @@ data class RssEpisode(
     val pubDate: String,
     val durationSeconds: Int,
     val imageUrl: String?,
+    val transcriptUrl: String? = null,
 )

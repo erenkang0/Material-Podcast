@@ -315,6 +315,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         updatePosition()
     }
 
+    fun seekToMs(ms: Long) {
+        val ctrl = controller ?: return
+        ctrl.seekTo(ms.coerceAtLeast(0L))
+        updatePosition()
+    }
+
     fun seekBy(deltaMs: Long) {
         val ctrl = controller ?: return
         val newPos = (ctrl.currentPosition + deltaMs).coerceAtLeast(0L)

@@ -26,6 +26,7 @@ data class PodcastEpisode(
     val podcastTitle: String,
     val podcastId: String,
     val podcastAuthor: String = "",
+    val transcriptUrl: String = "",
 ) {
     val durationLabel: String get() {
         val h = durationSeconds / 3600
@@ -85,6 +86,10 @@ data class ExploreCategory(
  * Where the user left off in an episode. Carries the whole episode so a "continue
  * listening" entry can be rendered and resumed from anywhere, plus when it was last touched.
  */
+/** One timed line of a transcript: [text] starting at [startMs] into the episode. */
+@Immutable
+data class TranscriptCue(val startMs: Long, val text: String)
+
 /**
  * Aggregate listening statistics, persisted on-device. Times are in milliseconds; maps are
  * keyed by podcast id (with a parallel [titles] lookup) and by ISO date (yyyy-MM-dd).

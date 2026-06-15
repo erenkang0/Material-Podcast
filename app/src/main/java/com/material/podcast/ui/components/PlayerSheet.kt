@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Subject
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -266,6 +267,7 @@ fun FullPlayerSheet(
     onOpenShow: (String) -> Unit,
     onOpenAuthor: (String) -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenTranscript: () -> Unit,
 ) {
     val player = LocalPlayer.current
     player.nowPlaying ?: return
@@ -330,6 +332,7 @@ fun FullPlayerSheet(
                 onOpenShow = onOpenShow,
                 onOpenAuthor = onOpenAuthor,
                 onOpenQueue = onOpenQueue,
+                onOpenTranscript = onOpenTranscript,
             )
         }
     }
@@ -342,6 +345,7 @@ private fun FullPlayerContent(
     onOpenShow: (String) -> Unit,
     onOpenAuthor: (String) -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenTranscript: () -> Unit,
 ) {
     val episode = player.nowPlaying ?: return
 
@@ -651,6 +655,18 @@ private fun FullPlayerContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (episode.transcriptUrl.isNotBlank()) {
+                IconButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onOpenTranscript()
+                }) {
+                    Icon(
+                        Icons.Rounded.Subject,
+                        "Transkript",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             IconButton(onClick = {
                 showSleepTimer = !showSleepTimer
             }) {

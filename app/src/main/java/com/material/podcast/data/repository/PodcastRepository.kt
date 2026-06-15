@@ -112,6 +112,7 @@ class PodcastRepository {
                         podcastTitle = podcast.title,
                         podcastId = podcast.id,
                         podcastAuthor = podcast.author,
+                        transcriptUrl = ep.transcriptUrl ?: "",
                     )
                 }
                 episodeCache[podcast.id] = episodes
@@ -121,6 +122,21 @@ class PodcastRepository {
             emptyList()
         }
     }
+
+    suspend fun fetchTranscript(url: String): List<com.material.podcast.data.model.TranscriptCue> =
+        withContext(Dispatchers.IO) {
+            if (url.isBlank()) return@withContext emptyList()
+            try {
+                val request = Request.Builder().url(url).build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext emptyList()
+                    val body = response.body?.string() ?: return@withContext emptyList()
+                    com.material.podcast.data.rss.TranscriptParser.parse(body)
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
 
     private fun ItunesResult.toPodcast() = Podcast(
         id = effectiveId,

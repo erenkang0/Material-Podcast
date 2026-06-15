@@ -23,6 +23,7 @@ class RssParser {
         var pubDate = ""
         var durationStr = ""
         var imageUrl: String? = null
+        var transcriptUrl: String? = null
         var channelImageUrl: String? = null
         var inChannelImage = false
         var inItemImage = false
@@ -36,7 +37,7 @@ class RssParser {
                         inItem = true
                         guid = ""; title = ""; description = ""
                         enclosureUrl = ""; pubDate = ""; durationStr = ""
-                        imageUrl = null
+                        imageUrl = null; transcriptUrl = null
                     }
                     !inItem && tag == "image" -> inChannelImage = true
                     inItem && tag == "image" -> inItemImage = true
@@ -58,6 +59,16 @@ class RssParser {
                     inItem && tag == "guid" -> guid = safeNextText(parser)
                     inItem && tag == "itunes:image" -> {
                         imageUrl = parser.getAttributeValue(null, "href") ?: imageUrl
+                    }
+                    inItem && tag == "podcast:transcript" -> {
+                        val url = parser.getAttributeValue(null, "url")
+                        val type = parser.getAttributeValue(null, "type") ?: ""
+                        // Prefer a text format we can parse (VTT/SRT); take the first otherwise.
+                        if (url != null && (transcriptUrl == null ||
+                                type.contains("vtt") || type.contains("srt"))
+                        ) {
+                            transcriptUrl = url
+                        }
                     }
                     !inItem && inChannelImage && tag == "url" -> {
                         channelImageUrl = safeNextText(parser)
@@ -82,6 +93,7 @@ class RssParser {
                                     pubDate = formatDate(pubDate),
                                     durationSeconds = parseDuration(durationStr),
                                     imageUrl = imageUrl ?: channelImageUrl,
+                                    transcriptUrl = transcriptUrl,
                                 )
                             )
                         }

@@ -25,6 +25,7 @@ import com.material.podcast.ui.screens.SearchScreen
 import com.material.podcast.ui.screens.SettingsScreen
 import com.material.podcast.ui.screens.ShowDetailsScreen
 import com.material.podcast.ui.screens.StatsScreen
+import com.material.podcast.ui.screens.TranscriptScreen
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -36,6 +37,7 @@ sealed class Screen(val route: String) {
     data object CategoryEditor : Screen("category_editor")
     data object Queue : Screen("queue")
     data object Stats : Screen("stats")
+    data object Transcript : Screen("transcript")
     data object ShowDetails : Screen("show/{podcastId}") {
         fun create(id: String) = "show/${id}"
     }
@@ -97,6 +99,10 @@ fun AppNavHost(
 
         composable(Screen.Stats.route) {
             StatsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Transcript.route) {
+            TranscriptScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Settings.route) {

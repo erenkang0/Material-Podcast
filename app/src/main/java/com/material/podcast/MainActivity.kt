@@ -219,6 +219,10 @@ private fun PodcastApp(themeController: ThemeController) {
                 player.expandSheet = false
                 navController.navigate(Screen.Queue.route)
             },
+            onOpenTranscript = {
+                player.expandSheet = false
+                navController.navigate(Screen.Transcript.route)
+            },
         )
     }
 }
