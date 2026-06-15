@@ -1,15 +1,15 @@
 package com.material.podcast.data.store
 
-import androidx.compose.runtime.mutableStateListOf
 import com.material.podcast.data.model.Podcast
 
+/**
+ * Backwards-compatible facade over [LibraryStore] for followed podcasts.
+ * All state is now persisted on-device by [LibraryStore].
+ */
 object FavoritesStore {
-    val podcasts = mutableStateListOf<Podcast>()
+    val podcasts get() = LibraryStore.followedPodcasts
 
-    fun isFavorite(podcastId: String) = podcasts.any { it.id == podcastId }
+    fun isFavorite(podcastId: String) = LibraryStore.isFollowed(podcastId)
 
-    fun toggle(podcast: Podcast) {
-        val idx = podcasts.indexOfFirst { it.id == podcast.id }
-        if (idx >= 0) podcasts.removeAt(idx) else podcasts.add(0, podcast)
-    }
+    fun toggle(podcast: Podcast) = LibraryStore.toggleFollow(podcast)
 }

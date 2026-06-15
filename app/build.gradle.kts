@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.gson)
     // Images
     implementation(libs.coil.compose)
+    implementation(libs.palette)
     // Audio
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)

@@ -111,6 +111,7 @@ class PodcastRepository {
                         durationSeconds = ep.durationSeconds,
                         podcastTitle = podcast.title,
                         podcastId = podcast.id,
+                        podcastAuthor = podcast.author,
                     )
                 }
                 episodeCache[podcast.id] = episodes
