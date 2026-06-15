@@ -473,10 +473,11 @@ private fun SuccessContent(
                             player.expandSheet = true
                         },
                         isDownloaded = LibraryStore.isDownloaded(episode.guid),
+                        modifier = Modifier.animateItem(),
                     )
                     HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(start = 88.dp, end = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                     )
                 }
             }

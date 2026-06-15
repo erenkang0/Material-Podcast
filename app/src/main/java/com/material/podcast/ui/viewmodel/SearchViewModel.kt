@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.material.podcast.EchoesApplication
 import com.material.podcast.data.model.Podcast
+import com.material.podcast.data.store.SearchHistoryStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +47,8 @@ class SearchViewModel : ViewModel() {
             _isSearching.value = true
             try {
                 _results.value = repo.searchPodcasts(query)
+                // Only record once the debounced search actually executes.
+                SearchHistoryStore.add(query)
             } catch (_: Exception) {
                 _results.value = emptyList()
             } finally {

@@ -2,6 +2,7 @@
 
 package com.material.podcast.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.material.podcast.data.store.LibraryStore
+import com.material.podcast.data.store.SearchHistoryStore
 import com.material.podcast.ui.components.GenreChip
 import com.material.podcast.ui.components.PodcastCard
 import com.material.podcast.ui.components.PodcastListItem
@@ -61,6 +66,9 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
     val isSearching by vm.isSearching.collectAsStateWithLifecycle()
     val trending by vm.trendingPodcasts.collectAsStateWithLifecycle()
     val recent = LibraryStore.recentPodcasts
+    // Touch the store once so it initialises and exposes its reactive list.
+    remember { SearchHistoryStore.get() }
+    val history = SearchHistoryStore.queries
 
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(false) }
@@ -111,6 +119,64 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
         ) {
             // Search results inside the expanded bar
             LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                // When nothing is typed yet, surface recent searches.
+                if (query.isBlank() && history.isNotEmpty()) {
+                    item(key = "history_header") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 8.dp, top = 4.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.History, null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(
+                                "Son aramalar",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { SearchHistoryStore.clear() }) {
+                                Text("Tümünü temizle")
+                            }
+                        }
+                    }
+                    item(key = "history_chips") {
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            history.forEach { item ->
+                                AssistChip(
+                                    onClick = { query = item; vm.search(item) },
+                                    label = { Text(item) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.History, null,
+                                            modifier = Modifier.size(AssistChipDefaults.IconSize),
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Rounded.Close,
+                                            contentDescription = "\"$item\" aramasını kaldır",
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clickable { SearchHistoryStore.remove(item) },
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
                 items(results, key = { it.id }) { podcast ->
                     PodcastListItem(
                         podcast = podcast,
@@ -120,11 +186,19 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
                 if (results.isEmpty() && query.isNotBlank() && !isSearching) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                "\"$query\" için sonuç bulunamadı",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Rounded.Search, null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(40.dp),
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    "\"$query\" için sonuç bulunamadı",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

@@ -491,11 +491,11 @@ private fun FullPlayerContent(
     var dragging by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
     val sliderValue = if (dragging) scrubValue else player.progress
-    val momentFractions = remember(episode.guid, player.durationMs) {
-        LibraryStore.moments
-            .filter { it.episodeGuid == episode.guid }
-            .map { it.positionMs.toFloat() / player.durationMs.coerceAtLeast(1L) }
-    }
+    // Read LibraryStore.moments directly (it is a SnapshotStateList) so the seek bar
+    // markers update live as moments are added — without needing to toggle the sheet.
+    val momentFractions = LibraryStore.moments
+        .filter { it.episodeGuid == episode.guid }
+        .map { it.positionMs.toFloat() / player.durationMs.coerceAtLeast(1L) }
 
     var lastTick by remember { mutableIntStateOf(-1) }
     LaunchedEffect(sliderValue, dragging) {
@@ -834,7 +834,10 @@ private fun FullPlayerContent(
                 onValueChangeFinished = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
                 valueRange = 0.5f..2.0f,
                 steps = 5,
-                modifier = Modifier.fillMaxWidth(),
+                // Slightly shorter than the default to reduce its footprint.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
             )
         }
 

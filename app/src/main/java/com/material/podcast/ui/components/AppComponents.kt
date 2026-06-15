@@ -45,6 +45,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Forward30
@@ -294,6 +296,82 @@ fun PodcastListItem(
     )
 }
 
+/**
+ * Parses the "MMM d, yyyy" date string we store in [PodcastEpisode.publishedDate] and returns a
+ * concise Turkish relative label ("3 gün önce", "Bugün") for recent items, falling back to an
+ * absolute "d MMM yyyy" Turkish date for older ones. Returns the raw string if it can't be parsed.
+ */
+private fun relativeTurkishDate(raw: String): String {
+    if (raw.isBlank()) return ""
+    val parsed = runCatching {
+        java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.ENGLISH).parse(raw)
+    }.getOrNull() ?: return raw
+    val now = System.currentTimeMillis()
+    val days = ((now - parsed.time) / 86_400_000L).toInt()
+    return when {
+        days < 0 -> formatTurkishDate(parsed)
+        days == 0 -> "Bugün"
+        days == 1 -> "Dün"
+        days < 7 -> "$days gün önce"
+        days < 14 -> "Geçen hafta"
+        days < 30 -> "${days / 7} hafta önce"
+        days < 60 -> "Geçen ay"
+        days < 365 -> "${days / 30} ay önce"
+        else -> formatTurkishDate(parsed)
+    }
+}
+
+private val TR_MONTHS = arrayOf(
+    "Oca", "Şub", "Mar", "Nis", "May", "Haz",
+    "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara",
+)
+
+private fun formatTurkishDate(date: java.util.Date): String {
+    val cal = java.util.Calendar.getInstance().apply { time = date }
+    val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
+    val month = TR_MONTHS[cal.get(java.util.Calendar.MONTH)]
+    val year = cal.get(java.util.Calendar.YEAR)
+    return "$day $month $year"
+}
+
+/** True if the episode was published within the last [withinDays] days. */
+private fun isRecentEpisode(raw: String, withinDays: Int = 3): Boolean {
+    if (raw.isBlank()) return false
+    val parsed = runCatching {
+        java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.ENGLISH).parse(raw)
+    }.getOrNull() ?: return false
+    val days = (System.currentTimeMillis() - parsed.time) / 86_400_000L
+    return days in 0 until withinDays.toLong()
+}
+
+/** Small uppercase "YENİ" pill for very recent episodes. */
+@Composable
+private fun NewBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    ) {
+        Text(
+            "YENİ",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+/** Subtle separator dot between metadata fields. */
+@Composable
+private fun MetaDot() {
+    Box(
+        Modifier
+            .size(3.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)),
+    )
+}
+
 @Composable
 fun EpisodeListItem(
     episode: PodcastEpisode,
@@ -307,6 +385,26 @@ fun EpisodeListItem(
     val haptics = LocalHapticFeedback.current
     val isCurrentEpisode = player.nowPlaying?.guid == episode.guid
     var showActionsSheet by remember { mutableStateOf(false) }
+
+    // Per-episode resume state: in-progress fraction + "played" detection. Observing the
+    // SnapshotStateList keeps this row live as the user listens elsewhere.
+    val resumePoint = LibraryStore.resumePoints.firstOrNull { it.episode.guid == episode.guid }
+    val savedFraction = resumePoint?.fraction ?: 0f
+    val inProgress = !isCurrentEpisode && savedFraction > 0.02f && savedFraction < 0.98f
+    // Download lifecycle for queued/downloading/downloaded badges.
+    val dlState = EchoesApplication.instance.downloadManager.states[episode.guid]
+    val isQueued = dlState?.status == DownloadStatus.Queued
+    val isDownloading = dlState?.status == DownloadStatus.Downloading
+    val isNew = remember(episode.guid) { isRecentEpisode(episode.publishedDate) }
+    val relativeDate = remember(episode.publishedDate) { relativeTurkishDate(episode.publishedDate) }
+    val isPlayed = !isCurrentEpisode && savedFraction >= 0.98f
+    val remainingLabel = remember(episode.durationSeconds, savedFraction) {
+        if (inProgress) {
+            val remainingSec = (episode.durationSeconds * (1f - savedFraction)).toInt().coerceAtLeast(0)
+            val m = remainingSec / 60
+            if (m >= 1) "$m dk kaldı" else "Az kaldı"
+        } else null
+    }
 
     if (showActionsSheet) {
         EpisodeActionsSheet(
@@ -392,29 +490,67 @@ fun EpisodeListItem(
         ) {
             ListItem(
                 headlineContent = {
-                    Text(
-                        episode.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (isCurrentEpisode) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface,
-                    )
+                    Row(verticalAlignment = Alignment.Top) {
+                        if (isNew) {
+                            NewBadge(modifier = Modifier.padding(end = 6.dp, top = 1.dp))
+                        }
+                        Text(
+                            episode.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = when {
+                                isCurrentEpisode -> MaterialTheme.colorScheme.primary
+                                isPlayed -> MaterialTheme.colorScheme.onSurfaceVariant
+                                else -> MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
                 },
                 supportingContent = {
                     Column {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            "${episode.publishedDate} · ${episode.durationLabel}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Spacer(Modifier.height(3.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            if (isPlayed) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = "Dinlendi",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                            // Primary meta: remaining time while in progress, else relative date.
+                            Text(
+                                text = remainingLabel ?: relativeDate.ifBlank { episode.publishedDate },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (inProgress) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            MetaDot()
+                            Text(
+                                text = episode.durationLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (isQueued || isDownloading) {
+                                MetaDot()
+                                Text(
+                                    text = if (isDownloading) "İndiriliyor" else "Sırada",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         if (episode.description.isNotBlank()) {
-                            Spacer(Modifier.height(3.dp))
+                            Spacer(Modifier.height(4.dp))
                             Text(
                                 episode.description,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -463,16 +599,46 @@ fun EpisodeListItem(
                     }
                 },
                 trailingContent = {
-                    FilledTonalIconButton(onClick = onPlay) {
-                        PlayPauseIcon(
-                            isPlaying = isCurrentEpisode && player.isPlaying,
-                            contentDescription = "Play",
-                        )
+                    FilledTonalIconButton(
+                        onClick = onPlay,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        if (inProgress) {
+                            // Resume affordance: a ring showing saved progress around the play icon.
+                            Box(contentAlignment = Alignment.Center) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    progress = { savedFraction },
+                                    modifier = Modifier.size(36.dp),
+                                    strokeWidth = 2.5.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                )
+                                Icon(
+                                    Icons.Rounded.PlayArrow,
+                                    contentDescription = "Devam et",
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        } else {
+                            PlayPauseIcon(
+                                isPlaying = isCurrentEpisode && player.isPlaying,
+                                contentDescription = if (isPlayed) "Yeniden oynat" else "Oynat",
+                            )
+                        }
                     }
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            if (showProgress && progressFraction > 0f) {
+            // In-progress resume bar (when this row isn't the active episode).
+            if (inProgress) {
+                LinearProgressIndicator(
+                    progress = { savedFraction },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                )
+            }
+            if (showProgress && progressFraction > 0f && !isCurrentEpisode && !inProgress) {
                 LinearProgressIndicator(
                     progress = { progressFraction },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(3.dp).clip(CircleShape),
