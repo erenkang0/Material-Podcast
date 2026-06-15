@@ -8,9 +8,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
@@ -412,9 +414,15 @@ private fun ActionRow(
 ) {
     val haptics = LocalHapticFeedback.current
 
-    // After following, show "Takip ediliyor" for 3 seconds, then collapse to a compact icon.
+    // After actively following, show "Takip ediliyor" for 3 seconds, then collapse to a compact
+    // icon. Already-followed shows open straight in the collapsed state (no replay).
     var justFollowed by remember(podcast.id) { mutableStateOf(false) }
+    var firstComposition by remember(podcast.id) { mutableStateOf(true) }
     LaunchedEffect(following) {
+        if (firstComposition) {
+            firstComposition = false
+            return@LaunchedEffect
+        }
         if (following) {
             justFollowed = true
             delay(3000L)
@@ -469,24 +477,34 @@ private fun ActionRow(
             }
         }
 
-        // New-episode notification toggle
-        var notify by remember(podcast.id) { mutableStateOf(LibraryStore.isNotifyEnabled(podcast.id)) }
-        OutlinedIconButton(onClick = {
-            notify = !notify
-            LibraryStore.setNotifyEnabled(podcast.id, notify)
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        }) {
-            Icon(
-                if (notify) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
-                "Yeni bölüm bildirimi",
-                tint = if (notify) MaterialTheme.colorScheme.primary
-                       else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        // Download the latest episode for offline listening
-        if (latestEpisode != null) {
-            ShowDownloadButton(episode = latestEpisode)
+        // Notification + download buttons appear only once the show is followed (after the
+        // follow confirmation animation), sliding in next to the compact follow icon.
+        AnimatedVisibility(
+            visible = collapsed,
+            enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) + expandHorizontally(),
+            exit = fadeOut() + shrinkHorizontally(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                var notify by remember(podcast.id) { mutableStateOf(LibraryStore.isNotifyEnabled(podcast.id)) }
+                OutlinedIconButton(onClick = {
+                    notify = !notify
+                    LibraryStore.setNotifyEnabled(podcast.id, notify)
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }) {
+                    Icon(
+                        if (notify) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
+                        "Yeni bölüm bildirimi",
+                        tint = if (notify) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (latestEpisode != null) {
+                    ShowDownloadButton(episode = latestEpisode)
+                }
+            }
         }
     }
 }
