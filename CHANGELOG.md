@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.7-beta — 2026-06-15
+
+Five big additions, plus a calmer Home and a branded launch.
+
+### Smart audio
+- **Sessizlikleri atla** (skip silences) and **Ses yükselt** (voice boost) toggles in Now Playing,
+  driven through the playback service via Media3 session custom commands + a `LoudnessEnhancer`.
+
+### Senin İçin (For You)
+- A **personalized recommendation rail** on Home, derived from your most-listened / followed
+  genre and excluding shows you already follow.
+
+### Transcripts
+- Reads `<podcast:transcript>` (WebVTT/SRT) when a feed provides it: a **searchable transcript
+  screen** with tap-a-line-to-seek, opened from a button in Now Playing.
+
+### Listening stats + widget
+- An **İstatistikler** screen (total time, last-7-days chart, top shows) reached from Library.
+- A home-screen **"continue listening" widget**.
+
+### Snip
+- Export a **30/60-second audio clip** of what you're listening to (Media3 Transformer) and
+  share it via the system share sheet.
+
+### Polish
+- **Calmer Home animation** — one gentle fade on first load; the per-row reveal that re-fired on
+  scroll (and briefly overlapped the title) is gone.
+- **Logo opening animation** — the equalizer mark springs to life on cold start.
+
+---
+
 ## v0.6-beta — 2026-06-15
 
 ### Now Playing

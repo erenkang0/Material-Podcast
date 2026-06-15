@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
@@ -373,6 +374,9 @@ private fun FullPlayerContent(
 
     var showSleepTimer by remember { mutableStateOf(false) }
     var showAddMoment by remember { mutableStateOf(false) }
+    var showSnip by remember { mutableStateOf(false) }
+    var snipExporting by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     if (showAddMoment) {
         AddMomentDialog(
@@ -383,6 +387,47 @@ private fun FullPlayerContent(
                 showAddMoment = false
             },
             onDismiss = { showAddMoment = false },
+        )
+    }
+
+    val startSnip: (Int) -> Unit = { seconds ->
+        val end = player.positionMs
+        val start = (end - seconds * 1000L).coerceAtLeast(0L)
+        showSnip = false
+        snipExporting = true
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        com.material.podcast.media.SnipExporter.export(context, episode, start, end) { file ->
+            snipExporting = false
+            if (file != null) {
+                com.material.podcast.media.SnipExporter.share(context, file, episode)
+            } else {
+                android.widget.Toast.makeText(context, "Snip oluşturulamadı", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    if (showSnip) {
+        AlertDialog(
+            onDismissRequest = { showSnip = false },
+            title = { Text("Snip oluştur") },
+            text = { Text("Şu ana kadar olan kısımdan kısa bir ses klibi paylaş.") },
+            confirmButton = { TextButton(onClick = { startSnip(60) }) { Text("Son 60 sn") } },
+            dismissButton = { TextButton(onClick = { startSnip(30) }) { Text("Son 30 sn") } },
+        )
+    }
+
+    if (snipExporting) {
+        AlertDialog(
+            onDismissRequest = { },
+            confirmButton = { },
+            title = { Text("Snip hazırlanıyor…") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Lütfen bekleyin")
+                }
+            },
         )
     }
 
@@ -676,6 +721,15 @@ private fun FullPlayerContent(
                     tint = if (player.sleepTimerMs > 0 || player.sleepAtEnd || showSleepTimer)
                         MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = {
+                showSnip = true
+            }) {
+                Icon(
+                    Icons.Rounded.ContentCut,
+                    "Snip oluştur",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = {
