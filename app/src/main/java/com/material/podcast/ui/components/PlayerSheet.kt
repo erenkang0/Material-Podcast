@@ -3,6 +3,7 @@
 package com.material.podcast.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -17,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,10 +37,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
@@ -47,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +63,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,15 +74,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.material.podcast.EchoesApplication
+import com.material.podcast.data.store.LibraryStore
+import com.material.podcast.media.DownloadStatus
 import com.material.podcast.ui.LocalPlayer
+import com.material.podcast.ui.theme.PlayerColors
+import com.material.podcast.ui.theme.playerColorsFromSeed
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -189,7 +205,7 @@ fun NowPlayingBar(
                 }
                 if (player.isBuffering) {
                     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                        androidx.compose.material3.CircularProgressIndicator(
+                        CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -227,15 +243,50 @@ fun NowPlayingBar(
 }
 
 @Composable
-fun FullPlayerSheet(onDismiss: () -> Unit) {
+fun FullPlayerSheet(
+    onDismiss: () -> Unit,
+    onOpenShow: (String) -> Unit,
+    onOpenAuthor: (String) -> Unit,
+) {
     val player = LocalPlayer.current
     player.nowPlaying ?: return
     val haptics = LocalHapticFeedback.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Dynamic surface derived from the cover, with a smooth wash when the track changes.
+    val baseScheme = MaterialTheme.colorScheme
+    val isDark = baseScheme.surface.luminance() < 0.5f
+    val target: PlayerColors = if (player.artworkColorSeed != 0) {
+        playerColorsFromSeed(player.artworkColorSeed, isDark)
+    } else {
+        PlayerColors(baseScheme.surfaceContainerLow, baseScheme.onSurface, baseScheme.primary)
+    }
+    val bg by animateColorAsState(target.background, tween(500), label = "playerBg")
+    val accent by animateColorAsState(target.accent, tween(500), label = "playerAccent")
+    val onBg = target.onBackground
+
+    val tinted = baseScheme.copy(
+        surface = bg,
+        surfaceContainer = bg,
+        surfaceContainerLow = bg,
+        surfaceContainerHigh = bg,
+        background = bg,
+        onSurface = onBg,
+        onBackground = onBg,
+        onSurfaceVariant = onBg.copy(alpha = 0.7f),
+        primary = accent,
+        onPrimary = bg,
+        primaryContainer = accent,
+        onPrimaryContainer = bg,
+        secondaryContainer = accent.copy(alpha = 0.20f),
+        onSecondaryContainer = onBg,
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        containerColor = bg,
+        contentColor = onBg,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -248,12 +299,19 @@ fun FullPlayerSheet(onDismiss: () -> Unit) {
                         .width(36.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)),
+                        .background(onBg.copy(alpha = 0.3f)),
                 )
             }
         },
     ) {
-        FullPlayerContent(haptics = haptics, player = player)
+        androidx.compose.material3.MaterialTheme(colorScheme = tinted) {
+            FullPlayerContent(
+                haptics = haptics,
+                player = player,
+                onOpenShow = onOpenShow,
+                onOpenAuthor = onOpenAuthor,
+            )
+        }
     }
 }
 
@@ -261,6 +319,8 @@ fun FullPlayerSheet(onDismiss: () -> Unit) {
 private fun FullPlayerContent(
     haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
     player: com.material.podcast.ui.viewmodel.PlayerViewModel,
+    onOpenShow: (String) -> Unit,
+    onOpenAuthor: (String) -> Unit,
 ) {
     val episode = player.nowPlaying ?: return
 
@@ -278,7 +338,7 @@ private fun FullPlayerContent(
     )
 
     var dragging by remember { mutableStateOf(false) }
-    var scrubValue by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var scrubValue by remember { mutableFloatStateOf(0f) }
     val sliderValue = if (dragging) scrubValue else player.progress
 
     var lastTick by remember { mutableIntStateOf(-1) }
@@ -294,9 +354,21 @@ private fun FullPlayerContent(
         }
     }
 
-    var liked by remember { mutableStateOf(false) }
     var showSleepTimer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
+    var showAddMoment by remember { mutableStateOf(false) }
+
+    if (showAddMoment) {
+        AddMomentDialog(
+            positionLabel = formatTimeSec((player.positionMs / 1000).toInt()),
+            onConfirm = { note ->
+                player.addMoment(note)
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showAddMoment = false
+            },
+            onDismiss = { showAddMoment = false },
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -327,22 +399,41 @@ private fun FullPlayerContent(
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { onOpenShow(episode.podcastId) },
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = episode.podcastTitle,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = episode.podcastTitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clickable { onOpenShow(episode.podcastId) },
+                    )
+                    if (episode.podcastAuthor.isNotBlank() && episode.podcastAuthor != episode.podcastTitle) {
+                        Text(
+                            text = "  •  ${episode.podcastAuthor}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            textDecoration = TextDecoration.Underline,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable { onOpenAuthor(episode.podcastAuthor) },
+                        )
+                    }
+                }
             }
             IconButton(onClick = {
-                liked = !liked
+                player.toggleLike()
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             }) {
                 Icon(
-                    if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    if (player.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     "Beğen",
-                    tint = if (liked) MaterialTheme.colorScheme.tertiary
+                    tint = if (player.isLiked) MaterialTheme.colorScheme.primary
                            else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -394,7 +485,7 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // Speed slider — always visible above button row
+        // Speed slider — always visible above the button row
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -460,6 +551,7 @@ private fun FullPlayerContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clickable { player.play(ep) }
                                     .padding(vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -569,6 +661,16 @@ private fun FullPlayerContent(
                 )
             }
             IconButton(onClick = {
+                showAddMoment = true
+            }) {
+                Icon(
+                    Icons.Rounded.BookmarkAdd,
+                    "Favori an ekle",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DownloadButton(episode = episode)
+            IconButton(onClick = {
                 showQueue = !showQueue
                 if (showQueue) showSleepTimer = false
             }) {
@@ -583,6 +685,70 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(8.dp))
     }
+}
+
+@Composable
+private fun DownloadButton(episode: com.material.podcast.data.model.PodcastEpisode) {
+    val dm = EchoesApplication.instance.downloadManager
+    val downloaded = LibraryStore.isDownloaded(episode.guid)
+    val state = dm.states[episode.guid]
+    IconButton(onClick = {
+        when {
+            downloaded -> dm.delete(episode.guid)
+            state?.status == DownloadStatus.Downloading -> {} // already running
+            else -> dm.download(episode)
+        }
+    }) {
+        when {
+            downloaded -> Icon(
+                Icons.Rounded.DownloadDone, "İndirildi (kaldırmak için dokun)",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            state?.status == DownloadStatus.Downloading -> CircularProgressIndicator(
+                progress = { state.progress.coerceIn(0f, 1f) },
+                modifier = Modifier.size(22.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            else -> Icon(
+                Icons.Rounded.Download, "İndir",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddMomentDialog(
+    positionLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Favori an") },
+        text = {
+            Column {
+                Text(
+                    "Bu an $positionLabel konumunda kaydedilecek.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    placeholder = { Text("Not (isteğe bağlı)") },
+                    singleLine = false,
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(note) }) { Text("Kaydet") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("İptal") } },
+    )
 }
 
 private fun formatTimeSec(totalSec: Int): String {

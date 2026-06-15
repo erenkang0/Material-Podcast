@@ -193,6 +193,16 @@ private fun PodcastApp(themeController: ThemeController) {
     }
 
     if (player.expandSheet) {
-        FullPlayerSheet(onDismiss = { player.expandSheet = false })
+        FullPlayerSheet(
+            onDismiss = { player.expandSheet = false },
+            onOpenShow = { id ->
+                player.expandSheet = false
+                navController.navigate(Screen.ShowDetails.create(id))
+            },
+            onOpenAuthor = { name ->
+                player.expandSheet = false
+                navController.navigate(Screen.Author.create(name))
+            },
+        )
     }
 }

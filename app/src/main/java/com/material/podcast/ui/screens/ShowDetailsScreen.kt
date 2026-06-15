@@ -2,21 +2,23 @@
 
 package com.material.podcast.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,11 +34,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -60,16 +67,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.material.podcast.data.model.Podcast
 import com.material.podcast.data.model.PodcastEpisode
-import com.material.podcast.data.store.FavoritesStore
+import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.ui.LocalPlayer
 import com.material.podcast.ui.components.EpisodeListItem
 import com.material.podcast.ui.components.PodcastArtwork
+import com.material.podcast.ui.components.ResumeHint
 import com.material.podcast.ui.components.SectionHeader
 import com.material.podcast.ui.viewmodel.ShowDetailsUiState
 import com.material.podcast.ui.viewmodel.ShowDetailsViewModel
@@ -78,6 +87,7 @@ import com.material.podcast.ui.viewmodel.ShowDetailsViewModel
 fun ShowDetailsScreen(
     podcastId: String,
     onBack: () -> Unit,
+    onOpenAuthor: (String) -> Unit,
 ) {
     val vm: ShowDetailsViewModel = viewModel(
         key = podcastId,
@@ -86,13 +96,16 @@ fun ShowDetailsScreen(
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    var menuOpen by remember { mutableStateOf(false) }
+
+    val podcast = (uiState as? ShowDetailsUiState.Success)?.podcast
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
                 title = {
-                    val podcast = (uiState as? ShowDetailsUiState.Success)?.podcast
                     Text(
                         text = podcast?.title ?: "",
                         maxLines = 1,
@@ -101,12 +114,46 @@ fun ShowDetailsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Geri")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Rounded.MoreVert, "More")
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Rounded.MoreVert, "Daha fazla")
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            if (podcast != null) {
+                                val following = LibraryStore.isFollowed(podcast.id)
+                                DropdownMenuItem(
+                                    text = { Text(if (following) "Takipten çık" else "Takip et") },
+                                    leadingIcon = {
+                                        Icon(if (following) Icons.Rounded.Check else Icons.Rounded.Add, null)
+                                    },
+                                    onClick = { LibraryStore.toggleFollow(podcast); menuOpen = false },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Yapımcıyı gör") },
+                                    leadingIcon = { Icon(Icons.Rounded.Person, null) },
+                                    onClick = { menuOpen = false; onOpenAuthor(podcast.author) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Paylaş") },
+                                    leadingIcon = { Icon(Icons.Rounded.Share, null) },
+                                    onClick = { menuOpen = false; sharePodcast(context, podcast) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Bağlantıyı kopyala") },
+                                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
+                                    onClick = { menuOpen = false; copyLink(context, podcast) },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Yenile") },
+                                leadingIcon = { Icon(Icons.Rounded.Refresh, null) },
+                                onClick = { menuOpen = false; vm.load() },
+                            )
+                        }
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -125,9 +172,23 @@ fun ShowDetailsScreen(
                 episodes = state.episodes,
                 listState = listState,
                 contentPadding = innerPadding,
+                onOpenAuthor = onOpenAuthor,
             )
         }
     }
+}
+
+private fun sharePodcast(context: Context, podcast: Podcast) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, "${podcast.title} — ${podcast.author}\n${podcast.feedUrl}")
+    }
+    context.startActivity(Intent.createChooser(sendIntent, "Paylaş"))
+}
+
+private fun copyLink(context: Context, podcast: Podcast) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(podcast.title, podcast.feedUrl))
 }
 
 @Composable
@@ -176,9 +237,12 @@ private fun SuccessContent(
     episodes: List<PodcastEpisode>,
     listState: LazyListState,
     contentPadding: PaddingValues,
+    onOpenAuthor: (String) -> Unit,
 ) {
     val player = LocalPlayer.current
-    var following by remember(podcast.id) { mutableStateOf(FavoritesStore.isFavorite(podcast.id)) }
+    val context = LocalContext.current
+    var following by remember(podcast.id) { mutableStateOf(LibraryStore.isFollowed(podcast.id)) }
+    val resume = LibraryStore.resumeForPodcast(podcast.id)
 
     LazyColumn(
         state = listState,
@@ -188,15 +252,12 @@ private fun SuccessContent(
         ),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        // Header: artwork + meta
         item(key = "header") {
-            PodcastHeader(podcast = podcast)
+            PodcastHeader(podcast = podcast, onOpenAuthor = onOpenAuthor)
         }
 
-        // Action buttons
         item(key = "actions") {
             ActionRow(
-                podcast = podcast,
                 following = following,
                 onPlay = {
                     val first = episodes.firstOrNull() ?: return@ActionRow
@@ -205,19 +266,28 @@ private fun SuccessContent(
                 },
                 onFollowToggle = {
                     following = !following
-                    FavoritesStore.toggle(podcast)
+                    LibraryStore.toggleFollow(podcast)
                 },
+                onShare = { sharePodcast(context, podcast) },
             )
         }
 
-        // Description
+        if (resume != null) {
+            item(key = "resume") {
+                ResumeHint(
+                    point = resume,
+                    onResume = { player.resume(resume); player.expandSheet = true },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                )
+            }
+        }
+
         if (podcast.description.isNotBlank()) {
             item(key = "desc") {
                 ExpandableDescription(text = podcast.description)
             }
         }
 
-        // Episode count header
         item(key = "ep_header") {
             SectionHeader(
                 title = "Bölümler",
@@ -230,7 +300,6 @@ private fun SuccessContent(
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
         }
 
-        // Episodes list
         items(episodes, key = { it.guid }) { episode ->
             EpisodeListItem(
                 episode = episode,
@@ -263,7 +332,7 @@ private fun SuccessContent(
 }
 
 @Composable
-private fun PodcastHeader(podcast: Podcast) {
+private fun PodcastHeader(podcast: Podcast, onOpenAuthor: (String) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -287,7 +356,8 @@ private fun PodcastHeader(podcast: Podcast) {
             Text(
                 podcast.author,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { onOpenAuthor(podcast.author) },
             )
             Spacer(Modifier.height(4.dp))
             Row(
@@ -320,10 +390,10 @@ private fun PodcastHeader(podcast: Podcast) {
 
 @Composable
 private fun ActionRow(
-    podcast: Podcast,
     following: Boolean,
     onPlay: () -> Unit,
     onFollowToggle: () -> Unit,
+    onShare: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -350,7 +420,7 @@ private fun ActionRow(
                 }
             }
         }
-        OutlinedIconButton(onClick = { }) {
+        OutlinedIconButton(onClick = onShare) {
             Icon(Icons.Rounded.IosShare, "Paylaş")
         }
     }

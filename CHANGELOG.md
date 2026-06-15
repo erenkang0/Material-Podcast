@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.4-beta — 2026-06-15
+
+### On-device library (never deleted)
+- **LibraryStore** — all of the below persist to disk (SharedPreferences + Gson) and
+  survive restarts: followed podcasts, liked episodes, favorite moments, downloads,
+  Explore categories, resume points and recently-viewed podcasts.
+
+### Likes, notes & downloads
+- **Beğeniler** — the Now Playing heart now saves the episode to a Likes list, shown in
+  a new Library tab. Liked episodes that have notes get a "Notlu" badge.
+- **Favori Anlar** — bookmark the current timestamp with an optional note from Now Playing;
+  browse them in the Library "Notlar" tab and tap to replay from that exact second.
+- **İndirilenler** — download episode audio for offline playback (internal storage, live
+  progress). Playback automatically prefers the offline copy. Manage in the Downloads tab.
+
+### Now Playing
+- **Dynamic background** — the surface is tinted from the cover art: deep colour + white
+  text in dark theme; a soft, low-saturation tint + black text in light theme.
+- **Producer & show navigation** — tap the show title to open its page; tap the producer
+  name to open a new Author profile listing all of their podcasts.
+
+### Explore (Home)
+- **Continue where you left off** — a card at the top of Home (and Library, and each show
+  page) resumes the last episode from the saved position.
+- **Editable categories** — the rows on Home are now user-defined. The top-right edit
+  button opens an editor where each category has a name and a background search query
+  (up to 10 categories), with reset-to-default.
+
+### Search & Library
+- **Recently viewed** — Search's "popular" rail is replaced by "En son baktıkların".
+- **Library** — redesigned with five tabs (Saved · Likes · Notes · Downloads · Recent).
+
+### Podcast page
+- **Working ⋮ menu** — follow/unfollow, view producer, share, copy link, refresh.
+
+---
+
 ## v0.3-beta — 2026-06-14
 
 ### Background playback fix (critical)

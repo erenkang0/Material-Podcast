@@ -69,3 +69,28 @@ data class FavoriteMoment(
         podcastId = podcastId,
     )
 }
+
+/**
+ * A user-editable Explore section: a display [name] plus the [query] that is searched
+ * in the background to fill the row.
+ */
+@Immutable
+data class ExploreCategory(
+    val id: String,
+    val name: String,
+    val query: String,
+)
+
+/**
+ * Where the user left off in an episode. Carries the whole episode so a "continue
+ * listening" entry can be rendered and resumed from anywhere, plus when it was last touched.
+ */
+@Immutable
+data class ResumePoint(
+    val episode: PodcastEpisode,
+    val positionMs: Long,
+    val durationMs: Long,
+    val updatedAt: Long,
+) {
+    val fraction: Float get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+}

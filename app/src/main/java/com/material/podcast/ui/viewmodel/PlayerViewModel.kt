@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentName
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -16,11 +17,17 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.material.podcast.EchoesApplication
+import com.material.podcast.data.model.FavoriteMoment
 import com.material.podcast.data.model.PodcastEpisode
+import com.material.podcast.data.model.ResumePoint
+import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.media.PlaybackService
+import com.material.podcast.ui.theme.extractArtworkColor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -45,9 +52,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     var sleepTimerMs by mutableLongStateOf(0L)
         private set
 
+    /** Dominant ARGB color pulled from the current cover (0 = none/not ready). */
+    var artworkColorSeed by mutableIntStateOf(0)
+        private set
+    /** Whether the current episode is in the user's Beğeniler list. */
+    var isLiked by mutableStateOf(false)
+        private set
+
     val history = mutableStateListOf<PodcastEpisode>()
     private var pendingEpisode: PodcastEpisode? = null
+    private var pendingStartMs: Long = 0L
     private var sleepJob: Job? = null
+    private var lastSavedAt: Long = 0L
+
+    private val downloadManager get() = EchoesApplication.instance.downloadManager
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
@@ -68,8 +86,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 controller = controllerFuture.get().also { ctrl ->
                     ctrl.addListener(listener)
                     pendingEpisode?.let { ep ->
-                        performPlay(ep, ctrl)
+                        performPlay(ep, ctrl, pendingStartMs)
                         pendingEpisode = null
+                        pendingStartMs = 0L
                     }
                 }
             } catch (_: Exception) {}
@@ -78,10 +97,22 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             while (true) {
                 val ctrl = controller
-                if (ctrl != null && ctrl.isPlaying) updatePosition()
+                if (ctrl != null && ctrl.isPlaying) {
+                    updatePosition()
+                    maybeSaveProgress()
+                }
                 delay(250L)
             }
         }
+    }
+
+    /** Persist the resume point at most every 5s while playing. */
+    private fun maybeSaveProgress() {
+        val ep = nowPlaying ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastSavedAt < 5_000L) return
+        lastSavedAt = now
+        LibraryStore.saveProgress(ep, positionMs, durationMs)
     }
 
     private fun updatePosition() {
@@ -93,34 +124,82 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         progress = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
     }
 
-    fun play(episode: PodcastEpisode) {
+    fun play(episode: PodcastEpisode, startPositionMs: Long = 0L) {
         nowPlaying = episode
+        isLiked = LibraryStore.isLiked(episode.guid)
+        artworkColorSeed = 0
+        lastSavedAt = System.currentTimeMillis()
         history.removeIf { it.guid == episode.guid }
         history.add(0, episode)
         if (history.size > 50) history.removeLastOrNull()
 
+        viewModelScope.launch {
+            val seed = extractArtworkColor(getApplication<Application>(), episode.artworkUrl)
+            if (seed != null && nowPlaying?.guid == episode.guid) artworkColorSeed = seed
+        }
+
         val ctrl = controller
-        if (ctrl != null) performPlay(episode, ctrl) else pendingEpisode = episode
+        if (ctrl != null) {
+            performPlay(episode, ctrl, startPositionMs)
+        } else {
+            pendingEpisode = episode
+            pendingStartMs = startPositionMs
+        }
     }
 
-    private fun performPlay(episode: PodcastEpisode, ctrl: MediaController) {
+    /** Resume a saved "continue listening" point from its stored position. */
+    fun resume(point: ResumePoint) = play(point.episode, point.positionMs)
+
+    private fun performPlay(episode: PodcastEpisode, ctrl: MediaController, startPositionMs: Long) {
         val metadata = MediaMetadata.Builder()
             .setTitle(episode.title)
             .setArtist(episode.podcastTitle)
             .setArtworkUri(android.net.Uri.parse(episode.artworkUrl))
             .build()
+        // Prefer an offline copy when the episode has been downloaded.
+        val uri = downloadManager.localUriOrNull(episode.guid) ?: episode.audioUrl
         val item = MediaItem.Builder()
-            .setUri(episode.audioUrl)
+            .setUri(uri)
             .setMediaMetadata(metadata)
             .build()
-        ctrl.setMediaItem(item)
+        if (startPositionMs > 0L) ctrl.setMediaItem(item, startPositionMs) else ctrl.setMediaItem(item)
         ctrl.prepare()
         ctrl.play()
     }
 
     fun togglePlayPause() {
         val ctrl = controller ?: return
-        if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
+        if (ctrl.isPlaying) {
+            ctrl.pause()
+            nowPlaying?.let { LibraryStore.saveProgress(it, positionMs, durationMs) }
+        } else {
+            ctrl.play()
+        }
+    }
+
+    fun toggleLike() {
+        val ep = nowPlaying ?: return
+        LibraryStore.toggleLike(ep)
+        isLiked = LibraryStore.isLiked(ep.guid)
+    }
+
+    /** Bookmark the current position as a favorite moment with an optional note. */
+    fun addMoment(note: String) {
+        val ep = nowPlaying ?: return
+        LibraryStore.addMoment(
+            FavoriteMoment(
+                id = UUID.randomUUID().toString(),
+                episodeGuid = ep.guid,
+                episodeTitle = ep.title,
+                podcastTitle = ep.podcastTitle,
+                podcastId = ep.podcastId,
+                artworkUrl = ep.artworkUrl,
+                audioUrl = ep.audioUrl,
+                positionMs = positionMs,
+                note = note.trim(),
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
     }
 
     fun seekTo(fraction: Float) {

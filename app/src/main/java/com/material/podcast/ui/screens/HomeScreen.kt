@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,11 +16,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,16 +31,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.background
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.material.podcast.data.store.LibraryStore
+import com.material.podcast.ui.LocalPlayer
+import com.material.podcast.ui.components.ContinueListeningCard
 import com.material.podcast.ui.components.PodcastCard
 import com.material.podcast.ui.components.SectionHeader
 import com.material.podcast.ui.viewmodel.HomeUiState
@@ -53,10 +54,18 @@ import java.util.Calendar
 fun HomeScreen(
     onOpenShow: (String) -> Unit,
     onOpenThemes: () -> Unit,
+    onEditCategories: () -> Unit,
 ) {
     val vm: HomeViewModel = viewModel()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val player = LocalPlayer.current
+
+    val categories = LibraryStore.categories
+    val categoriesKey = categories.joinToString("|") { "${it.id}:${it.query}" }
+    LaunchedEffect(categoriesKey) { vm.load(categories.toList()) }
+
+    val resume = LibraryStore.lastResume()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -74,22 +83,11 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onEditCategories) {
+                        Icon(Icons.Rounded.Tune, "Kategorileri düzenle")
+                    }
                     IconButton(onClick = onOpenThemes) {
                         Icon(Icons.Rounded.Palette, "Tema")
-                    }
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Rounded.Person, "Profil",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(22.dp),
-                        )
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -112,7 +110,7 @@ fun HomeScreen(
                     Text(state.message, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(20.dp))
-                    OutlinedButton(onClick = vm::load) {
+                    OutlinedButton(onClick = { vm.load(categories.toList(), force = true) }) {
                         Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
                         Text(" Tekrar dene")
                     }
@@ -126,9 +124,19 @@ fun HomeScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                if (resume != null) {
+                    item(key = "continue") {
+                        ContinueListeningCard(
+                            point = resume,
+                            onResume = { player.resume(resume); player.expandSheet = true },
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+
                 if (state.featured.isNotEmpty()) {
                     item(key = "featured_header") {
-                        SectionHeader(title = "Öne Çıkanlar", actionLabel = "Tümünü gör")
+                        SectionHeader(title = "Öne Çıkanlar")
                     }
                     item(key = "featured_row") {
                         LazyRow(
@@ -142,57 +150,19 @@ fun HomeScreen(
                     }
                 }
 
-                if (state.technology.isNotEmpty()) {
-                    item(key = "tech_header") {
+                state.sections.forEach { section ->
+                    item(key = "header_${section.category.id}") {
                         SectionHeader(
-                            title = "Teknoloji",
+                            title = section.category.name,
                             modifier = Modifier.padding(top = 12.dp),
                         )
                     }
-                    item(key = "tech_row") {
+                    item(key = "row_${section.category.id}") {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 20.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
-                            items(state.technology, key = { "tech_${it.id}" }) { podcast ->
-                                PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
-                            }
-                        }
-                    }
-                }
-
-                if (state.science.isNotEmpty()) {
-                    item(key = "sci_header") {
-                        SectionHeader(
-                            title = "Bilim & Eğitim",
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
-                    }
-                    item(key = "sci_row") {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            items(state.science, key = { "sci_${it.id}" }) { podcast ->
-                                PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
-                            }
-                        }
-                    }
-                }
-
-                if (state.culture.isNotEmpty()) {
-                    item(key = "cult_header") {
-                        SectionHeader(
-                            title = "Toplum & Kültür",
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
-                    }
-                    item(key = "cult_row") {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            items(state.culture, key = { "cult_${it.id}" }) { podcast ->
+                            items(section.podcasts, key = { "${section.category.id}_${it.id}" }) { podcast ->
                                 PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
                             }
                         }

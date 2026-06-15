@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,9 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.ui.components.GenreChip
 import com.material.podcast.ui.components.PodcastCard
 import com.material.podcast.ui.components.PodcastListItem
@@ -56,6 +60,7 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
     val results by vm.results.collectAsStateWithLifecycle()
     val isSearching by vm.isSearching.collectAsStateWithLifecycle()
     val trending by vm.trendingPodcasts.collectAsStateWithLifecycle()
+    val recent = LibraryStore.recentPodcasts
 
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(false) }
@@ -64,6 +69,12 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
     ) {
+        Text(
+            "Ara",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp),
+        )
         SearchBar(
             inputField = {
                 SearchBarDefaults.InputField(
@@ -149,9 +160,40 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
                 }
             }
 
-            if (trending.isNotEmpty()) {
+            // Recently viewed — replaces the old "popular" rail.
+            if (recent.isNotEmpty()) {
+                item(key = "recent_header") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp, start = 20.dp, end = 8.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.History, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text(
+                            "En son baktıkların",
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                    }
+                }
+                item(key = "recent_row") {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        items(recent, key = { "recent_${it.id}" }) { podcast ->
+                            PodcastCard(podcast = podcast, onClick = { onOpenShow(podcast.id) })
+                        }
+                    }
+                }
+                item(key = "space") { Spacer(Modifier.height(8.dp)) }
+            } else if (trending.isNotEmpty()) {
+                // New users haven't viewed anything yet — show some popular starters.
                 item(key = "trend_header") {
-                    SectionHeader("Şu an popüler", modifier = Modifier.padding(top = 8.dp))
+                    SectionHeader("Popüler başlangıçlar", modifier = Modifier.padding(top = 8.dp))
                 }
                 item(key = "trend_row") {
                     LazyRow(

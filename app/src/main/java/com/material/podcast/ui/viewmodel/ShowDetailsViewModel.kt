@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.material.podcast.EchoesApplication
 import com.material.podcast.data.model.Podcast
 import com.material.podcast.data.model.PodcastEpisode
+import com.material.podcast.data.store.LibraryStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,7 @@ class ShowDetailsViewModel(private val podcastId: String) : ViewModel() {
             try {
                 val podcast = repo.getPodcast(podcastId)
                     ?: throw IllegalStateException("Podcast not found")
+                LibraryStore.recordView(podcast)
                 val episodes = repo.getEpisodes(podcast)
                 _uiState.value = ShowDetailsUiState.Success(podcast, episodes)
             } catch (e: Exception) {
