@@ -91,6 +91,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -345,16 +346,12 @@ fun EpisodeListItem(
             val progress = swipeState.progress
             val triggered = swipeState.targetValue == SwipeToDismissBoxValue.EndToStart
             val bgAlpha = (progress * 3f).coerceIn(0f, 1f)
+            val playGreen = Color(0xFF2E7D32)
+            val surfaceColor = MaterialTheme.colorScheme.surface
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        androidx.compose.ui.graphics.lerp(
-                            MaterialTheme.colorScheme.surface,
-                            Color(0xFF2E7D32), // deep green
-                            bgAlpha,
-                        )
-                    )
+                    .background(lerp(surfaceColor, playGreen, bgAlpha))
                     .padding(end = 24.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
