@@ -112,9 +112,9 @@ fun HomeScreen(
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greetingText = remember(hour) {
         when (hour) {
-            in 0..11 -> "Günaydın ☀️"
-            in 12..17 -> "İyi günler 🎧"
-            else -> "İyi akşamlar 🌙"
+            in 0..11 -> "Günaydın"
+            in 12..17 -> "İyi günler"
+            else -> "İyi akşamlar"
         }
     }
 
@@ -354,7 +354,7 @@ private fun ForYouPodcastCard(
                 .padding(horizontal = 6.dp, vertical = 3.dp),
         ) {
             Text(
-                text = "✨ Senin için",
+                text = "Senin için",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                 fontWeight = FontWeight.SemiBold,

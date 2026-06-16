@@ -139,6 +139,49 @@ class PodcastRepository {
             }
         }
 
+    suspend fun fetchTranscriptForEpisode(
+        episode: com.material.podcast.data.model.PodcastEpisode,
+    ): List<com.material.podcast.data.model.TranscriptCue> = withContext(Dispatchers.IO) {
+        // Build a prioritised list of candidate transcript URLs to try.
+        val candidates = buildList {
+            // 1. RSS-declared transcript URL (highest confidence)
+            if (episode.transcriptUrl.isNotBlank()) add(episode.transcriptUrl)
+
+            // 2. Derive from audio URL by substituting common transcript extensions.
+            val audio = episode.audioUrl
+            val base = audio.substringBefore('?') // strip query params
+            val stem = base.substringBeforeLast('.')
+            // Common extensions used by hosting platforms (Buzzsprout, Transistor, Podbean…)
+            listOf(".vtt", ".srt", "-transcript.vtt", "-transcript.srt",
+                   "_transcript.vtt", "_transcript.srt",
+                   ".json", "-transcript.json").forEach { ext ->
+                add("$stem$ext")
+            }
+
+            // 3. Try the episode description for any explicit transcript links
+            val descUrls = Regex("""https?://[^\s"'<>]+\.(vtt|srt|json)""")
+                .findAll(episode.description)
+                .map { it.value }
+                .toList()
+            addAll(descUrls)
+        }
+
+        for (url in candidates) {
+            try {
+                val request = Request.Builder().url(url).build()
+                val result = httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use emptyList()
+                    val body = response.body?.string() ?: return@use emptyList<com.material.podcast.data.model.TranscriptCue>()
+                    com.material.podcast.data.rss.TranscriptParser.parse(body)
+                }
+                if (result.isNotEmpty()) return@withContext result
+            } catch (_: Exception) {
+                // Try next candidate
+            }
+        }
+        emptyList()
+    }
+
     suspend fun fetchChapters(url: String): List<com.material.podcast.data.model.Chapter> =
         withContext(Dispatchers.IO) {
             if (url.isBlank()) return@withContext emptyList()

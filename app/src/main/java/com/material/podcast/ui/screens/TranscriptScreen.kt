@@ -104,12 +104,11 @@ fun TranscriptScreen(onBack: () -> Unit) {
         )
     }
 
-    LaunchedEffect(episode?.transcriptUrl) {
+    LaunchedEffect(episode?.guid) {
         loading = true
-        cues = episode?.transcriptUrl
-            ?.takeIf { it.isNotBlank() }
-            ?.let { EchoesApplication.instance.repository.fetchTranscript(it) }
-            ?: emptyList()
+        cues = episode?.let {
+            EchoesApplication.instance.repository.fetchTranscriptForEpisode(it)
+        } ?: emptyList()
         loading = false
     }
 

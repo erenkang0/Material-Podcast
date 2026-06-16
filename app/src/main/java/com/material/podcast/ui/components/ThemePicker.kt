@@ -2,9 +2,12 @@
 
 package com.material.podcast.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,11 +24,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Brightness6
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Brightness6
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,15 +41,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.material.podcast.data.store.SettingsStore
 import com.material.podcast.ui.theme.AppThemeColor
 import com.material.podcast.ui.theme.DarkModeOption
 import com.material.podcast.ui.theme.ThemeController
@@ -55,7 +66,12 @@ fun ThemePickerSheet(
     controller: ThemeController,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState()
+
+    var amberTaps by remember { mutableIntStateOf(0) }
+    var eldenRingUnlocked by remember { mutableStateOf(SettingsStore.isEldenRingUnlocked(context)) }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -68,13 +84,13 @@ fun ThemePickerSheet(
                 .padding(bottom = 24.dp),
         ) {
             SheetHeader(
-                title = "Appearance",
-                subtitle = "Pick a palette that's easy on your eyes",
+                title = "Görünüm",
+                subtitle = "Gözlerine rahat gelen bir renk seç",
             )
 
             Spacer(Modifier.height(20.dp))
             Text(
-                "Theme color",
+                "Tema rengi",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -84,18 +100,46 @@ fun ThemePickerSheet(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AppThemeColor.entries.forEach { item ->
-                    ColorSwatch(
-                        item = item,
-                        selected = controller.color == item,
-                        onClick = { controller.color = item },
-                    )
+                val visibleThemes = AppThemeColor.entries.filter {
+                    it != AppThemeColor.EldenRing || eldenRingUnlocked
+                }
+                visibleThemes.forEach { item ->
+                    if (item == AppThemeColor.Amber) {
+                        ColorSwatch(
+                            item = item,
+                            selected = controller.color == item,
+                            onClick = {
+                                controller.color = item
+                                amberTaps++
+                                if (amberTaps >= 6 && !eldenRingUnlocked) {
+                                    eldenRingUnlocked = true
+                                    SettingsStore.setEldenRingUnlocked(context)
+                                }
+                            },
+                        )
+                    } else if (item == AppThemeColor.EldenRing) {
+                        AnimatedVisibility(
+                            visible = eldenRingUnlocked,
+                            enter = fadeIn() + scaleIn(initialScale = 0.7f),
+                        ) {
+                            EldenRingSwatch(
+                                selected = controller.color == item,
+                                onClick = { controller.color = item },
+                            )
+                        }
+                    } else {
+                        ColorSwatch(
+                            item = item,
+                            selected = controller.color == item,
+                            onClick = { controller.color = item },
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "Mode",
+                "Mod",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -126,7 +170,7 @@ fun ThemePickerSheet(
 
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Echoes · v0.1 beta · crafted with Claude",
+                text = "Echoes · v1.0.0 · crafted with Claude",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -220,6 +264,70 @@ private fun ColorSwatch(
         Text(
             item.label,
             style = MaterialTheme.typography.labelMedium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+// Special swatch for the Elden Ring easter egg — golden gradient, sparkle icon
+@Composable
+private fun EldenRingSwatch(
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.12f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "eldenSwatch",
+    )
+    val goldGradient = Brush.radialGradient(
+        colors = listOf(Color(0xFFEED17A), Color(0xFFC8A84B), Color(0xFF3A2C00)),
+    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(58.dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(CircleShape)
+                .background(brush = goldGradient)
+                .then(
+                    if (selected) {
+                        Modifier.border(3.dp, Color(0xFFEED17A), CircleShape)
+                    } else {
+                        Modifier.border(2.dp, Color(0xFFC8A84B), CircleShape)
+                    }
+                )
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = "Selected",
+                    tint = Color(0xFF1E1500),
+                    modifier = Modifier.size(26.dp),
+                )
+            } else {
+                Icon(
+                    Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFF1E1500),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Elden Ring",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             color = if (selected) {
                 MaterialTheme.colorScheme.onSurface
             } else {

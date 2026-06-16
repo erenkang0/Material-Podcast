@@ -10,9 +10,15 @@ class DownloadNotificationManager(private val context: Context) {
     companion object {
         private const val CHANNEL_ID = "echoes_downloads"
         private const val CHANNEL_NAME = "İndirmeler"
+        private const val SUMMARY_ID = 1
+        private const val DONE_ID = 2
     }
 
     private val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    // guid -> (title, progress 0..1)
+    private val active = mutableMapOf<String, Pair<String, Float>>()
+    private var completedCount = 0
 
     init {
         val channel = NotificationChannel(
@@ -34,46 +40,54 @@ class DownloadNotificationManager(private val context: Context) {
         activeCount: Int,
         queuedCount: Int,
     ) {
-        val totalMB = if (totalBytes > 0) "%.1f MB".format(totalBytes / 1_048_576f) else ""
+        active[guid] = Pair(title, progress)
+        val count = active.size
+        val avgProgress = if (active.isEmpty()) 0f else active.values.map { it.second }.average().toFloat()
         val sub = buildString {
-            if (totalMB.isNotEmpty()) append(totalMB)
-            if (activeCount > 1) { if (isNotEmpty()) append(" • "); append("$activeCount aktif") }
-            if (queuedCount > 0) { if (isNotEmpty()) append(" • "); append("$queuedCount sırada") }
+            if (queuedCount > 0) append("$queuedCount sırada")
+        }
+        val contentText = buildString {
+            append("$count bölüm indiriliyor")
+            if (sub.isNotEmpty()) append(" · $sub")
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(title)
-            .setContentText(if (sub.isNotEmpty()) "İndiriliyor — $sub" else "İndiriliyor…")
-            .setProgress(100, (progress * 100).toInt().coerceIn(0, 100), progress <= 0f)
+            .setContentTitle(if (count == 1) title else "Echoes İndirme")
+            .setContentText(if (count == 1) "İndiriliyor…" else contentText)
+            .setProgress(100, (avgProgress * 100).toInt().coerceIn(0, 100), avgProgress <= 0f)
             .setOngoing(true)
             .setSilent(true)
             .build()
-        nm.notify(guid.hashCode(), notification)
+        nm.notify(SUMMARY_ID, notification)
     }
 
     fun showComplete(guid: String, title: String) {
-        nm.cancel(guid.hashCode())
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle(title)
-            .setContentText("İndirildi")
-            .setAutoCancel(true)
-            .build()
-        nm.notify(guid.hashCode() + 500_000, notification)
+        active.remove(guid)
+        completedCount++
+        if (active.isEmpty()) {
+            nm.cancel(SUMMARY_ID)
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle(if (completedCount == 1) title else "$completedCount bölüm indirildi")
+                .setContentText("İndirme tamamlandı")
+                .setAutoCancel(true)
+                .build()
+            nm.notify(DONE_ID, notification)
+            completedCount = 0
+        }
+        // If other downloads still active, the ongoing notification updates naturally
+        // via the next updateProgress call from a concurrent download.
     }
 
     fun showFailed(guid: String, title: String) {
-        nm.cancel(guid.hashCode())
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle(title)
-            .setContentText("İndirilemedi")
-            .setAutoCancel(true)
-            .build()
-        nm.notify(guid.hashCode() + 1_000_000, notification)
+        active.remove(guid)
+        if (active.isEmpty()) {
+            nm.cancel(SUMMARY_ID)
+        }
     }
 
     fun cancel(guid: String) {
-        nm.cancel(guid.hashCode())
+        active.remove(guid)
+        if (active.isEmpty()) nm.cancel(SUMMARY_ID)
     }
 }

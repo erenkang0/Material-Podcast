@@ -70,4 +70,13 @@ object SettingsStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString("now_playing_guid", guid).apply()
     }
+
+    fun isEldenRingUnlocked(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean("elden_ring_unlocked", false)
+
+    fun setEldenRingUnlocked(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean("elden_ring_unlocked", true).apply()
+    }
 }

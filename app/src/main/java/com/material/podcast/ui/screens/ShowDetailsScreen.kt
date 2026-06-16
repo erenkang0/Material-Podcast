@@ -443,7 +443,6 @@ private fun SuccessContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("🎧", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             text = if (listenedHours > 0)
                                 "Bu podcastten $listenedHours saat dinledin"

@@ -14,3 +14,6 @@ val EmeraldSeed = Color(0xFF00696C)
 val RoseSeed = Color(0xFFB23A48)
 val AmberSeed = Color(0xFF8A6A00)
 val LavenderSeed = Color(0xFF7B4DBC)
+
+// Easter egg — dark gothic golden theme inspired by the Lands Between
+val EldenRingSeed = Color(0xFFC8A84B)

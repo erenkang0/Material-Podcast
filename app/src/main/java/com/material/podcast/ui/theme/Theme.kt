@@ -185,6 +185,24 @@ private val LavenderDark = darkColorScheme(
     outline = Color(0xFF968E98), outlineVariant = Color(0xFF4A454D),
 )
 
+// Easter egg — dark gothic scheme; always rendered dark regardless of system setting.
+// Inspired by the desolation of the Lands Between: ash-black surfaces, tarnished gold accents.
+private val EldenRingDark = darkColorScheme(
+    primary = Color(0xFFC8A84B), onPrimary = Color(0xFF1E1500),
+    primaryContainer = Color(0xFF3A2C00), onPrimaryContainer = Color(0xFFEED17A),
+    secondary = Color(0xFF9E8B6A), onSecondary = Color(0xFF1A1506),
+    secondaryContainer = Color(0xFF2E2610), onSecondaryContainer = Color(0xFFD4BF99),
+    tertiary = Color(0xFF8C6B5A), onTertiary = Color(0xFF1A0E08),
+    tertiaryContainer = Color(0xFF3A2318), onTertiaryContainer = Color(0xFFD4A98A),
+    background = Color(0xFF0D0B07), onBackground = Color(0xFFE8DFD0),
+    surface = Color(0xFF0D0B07), onSurface = Color(0xFFE8DFD0),
+    surfaceVariant = Color(0xFF2E2A20), onSurfaceVariant = Color(0xFFB8AE9C),
+    surfaceContainerLowest = Color(0xFF080604), surfaceContainerLow = Color(0xFF131009),
+    surfaceContainer = Color(0xFF18150D), surfaceContainerHigh = Color(0xFF221E14),
+    surfaceContainerHighest = Color(0xFF2C2819),
+    outline = Color(0xFF6B6252), outlineVariant = Color(0xFF3D3828),
+)
+
 /** A selectable color story, with its matched light + dark schemes and a swatch for the picker. */
 enum class AppThemeColor(
     val label: String,
@@ -197,6 +215,7 @@ enum class AppThemeColor(
     Rose("Rose", RoseSeed, RoseLight, RoseDark),
     Amber("Amber", AmberSeed, AmberLight, AmberDark),
     Lavender("Lavender", LavenderSeed, LavenderLight, LavenderDark),
+    EldenRing("Elden Ring", EldenRingSeed, EldenRingDark, EldenRingDark),
 }
 
 /** How the app resolves light vs dark. */
@@ -326,7 +345,8 @@ fun EchoesTheme(
     content: @Composable () -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
-    val darkTheme = when (controller.darkMode) {
+    // EldenRing is always dark — it's a gothic theme, light mode would be jarring.
+    val darkTheme = if (controller.color == AppThemeColor.EldenRing) true else when (controller.darkMode) {
         DarkModeOption.System -> systemDark
         DarkModeOption.Light -> false
         DarkModeOption.Dark -> true
