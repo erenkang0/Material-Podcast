@@ -57,10 +57,6 @@ object NfcShareController {
         activeShare = null
     }
 
-    fun setReceiving(value: Boolean) {
-        receiving = value
-    }
-
     /** Build the `echoes://share?…` deep link that encodes [payload]. */
     fun buildUri(payload: SharePayload): String = Uri.Builder()
         .scheme(SCHEME)
