@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -166,7 +165,7 @@ fun NfcShareSheet(onDismiss: () -> Unit) {
 private fun RadarPulse() {
     val transition = rememberInfiniteTransition(label = "radar")
 
-    val pulse by transition.animateFloat(
+    val pulse = transition.animateFloat(
         initialValue = 0.92f,
         targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
@@ -216,7 +215,7 @@ private fun RadarPulse() {
         Box(
             modifier = Modifier
                 .size(96.dp)
-                .graphicsLayer { scaleX = pulse; scaleY = pulse }
+                .graphicsLayer { scaleX = pulse.value; scaleY = pulse.value }
                 .background(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shape = androidx.compose.foundation.shape.CircleShape,

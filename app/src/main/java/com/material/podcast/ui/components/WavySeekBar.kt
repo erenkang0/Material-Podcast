@@ -36,7 +36,7 @@ private const val SNAP_THRESHOLD = 0.018f  // 1.8% of total duration
 
 @Composable
 fun WavySeekBar(
-    fraction: Float,
+    fraction: () -> Float,
     playing: Boolean,
     onScrubStart: () -> Unit,
     onScrub: (Float) -> Unit,
@@ -60,8 +60,10 @@ fun WavySeekBar(
     val waveLengthPx = with(density) { 16.dp.toPx() }
     val targetAmplitudePx = with(density) { 3.dp.toPx() }
 
-    var dragFrac by remember { mutableFloatStateOf(fraction) }
+    var dragFrac by remember { mutableFloatStateOf(fraction()) }
     var lastSnappedFrac by remember { mutableFloatStateOf(-1f) }
+    // Hoist a single Path so we don't allocate one per frame in the draw loop.
+    val wavePath = remember { Path() }
 
     // Continuously scroll the wave phase while playing; freeze when paused.
     val waveTransition = rememberInfiniteTransition(label = "wave")
@@ -133,7 +135,7 @@ fun WavySeekBar(
         val startX = thumbR
         val endX = size.width - thumbR
         val trackWidth = (endX - startX).coerceAtLeast(0f)
-        val thumbX = startX + trackWidth * fraction.coerceIn(0f, 1f)
+        val thumbX = startX + trackWidth * fraction().coerceIn(0f, 1f)
         // Small gap on either side of the thumb, matching the M3 Slider look.
         val gap = thumbR * 0.6f
 
@@ -174,19 +176,19 @@ fun WavySeekBar(
                     cap = StrokeCap.Round,
                 )
             } else {
-                val path = Path().apply {
-                    moveTo(startX, centerY)
-                    var x = startX
-                    val step = 2f
-                    while (x <= activeEnd) {
-                        val t = (x - startX) / waveLengthPx * (2f * PI).toFloat() + phase
-                        lineTo(x, centerY + amplitude * sin(t))
-                        x += step
-                    }
-                    lineTo(activeEnd, centerY + amplitude * sin((activeEnd - startX) / waveLengthPx * (2f * PI).toFloat() + phase))
+                wavePath.reset()
+                wavePath.moveTo(startX, centerY)
+                var x = startX
+                val step = 2f
+                val k = (2f * PI).toFloat() / waveLengthPx
+                while (x <= activeEnd) {
+                    val t = (x - startX) * k + phase
+                    wavePath.lineTo(x, centerY + amplitude * sin(t))
+                    x += step
                 }
+                wavePath.lineTo(activeEnd, centerY + amplitude * sin((activeEnd - startX) * k + phase))
                 drawPath(
-                    path = path,
+                    path = wavePath,
                     color = activeColor,
                     style = Stroke(width = activeStrokePx, cap = StrokeCap.Round),
                 )

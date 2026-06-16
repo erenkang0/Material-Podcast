@@ -53,8 +53,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -137,9 +138,13 @@ fun TranscriptScreen(onBack: () -> Unit) {
     val hasTimestamps = remember(cues) { cues.any { it.startMs >= 0 } }
 
     // Index (within the unfiltered list) of the cue currently being spoken.
-    val currentIndex = remember(player.positionMs, cues) {
-        if (!hasTimestamps) -1
-        else cues.indexOfLast { it.startMs in 0..player.positionMs }
+    // derivedStateOf so that, although player.positionMs changes every 250ms,
+    // downstream readers only recompose when the active line index actually changes.
+    val currentIndex by remember(cues, hasTimestamps) {
+        derivedStateOf {
+            if (!hasTimestamps) -1
+            else cues.indexOfLast { it.startMs in 0..player.positionMs }
+        }
     }
 
     // Centering offset: half the viewport height (in px) so the active line sits mid-screen.
@@ -386,10 +391,12 @@ private fun LyricLine(
         isPast -> 0.3f
         else -> 0.38f
     }
-    val targetSize = if (isCurrent) 30f else 22f
+    // Base font size is the inactive size (22sp); the active line is scaled up via the
+    // graphics layer (30/22) so the text is never remeasured/relaid-out per frame.
+    val targetScale = if (isCurrent) 30f / 22f else 1f
 
     val alpha by animateFloatAsState(targetAlpha, tween(350), label = "lyricAlpha")
-    val fontSize by animateFloatAsState(targetSize, tween(350), label = "lyricSize")
+    val scale by animateFloatAsState(targetScale, tween(350), label = "lyricScale")
     val color by animateColorAsState(
         if (isCurrent) onBg else onBg.copy(alpha = 0.9f),
         tween(350),
@@ -398,14 +405,21 @@ private fun LyricLine(
 
     Text(
         text = cue.text,
-        fontSize = fontSize.sp,
-        lineHeight = (fontSize * 1.25f).sp,
+        fontSize = 22f.sp,
+        lineHeight = (22f * 1.25f).sp,
         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
         color = color,
         textAlign = TextAlign.Start,
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(alpha)
+            .graphicsLayer {
+                this.alpha = alpha
+                scaleX = scale
+                scaleY = scale
+                // Scale from the start/left edge so left-aligned text grows toward the
+                // right, preserving the original left margin like the fontSize version.
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            }
             .clip(RoundedCornerShape(14.dp))
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },

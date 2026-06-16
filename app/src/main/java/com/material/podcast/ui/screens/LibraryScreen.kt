@@ -86,6 +86,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -130,6 +131,9 @@ fun LibraryScreen(
     val resume = LibraryStore.lastResume()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val followedCount = LibraryStore.followedPodcasts.size
+    // Derive the settled selected tab so the tab row only recomposes when the
+    // page index actually changes, not on every scroll/fling fraction.
+    val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
 
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars,
@@ -199,12 +203,12 @@ fun LibraryScreen(
 
             // Tab row with pill-shaped indicator using spring physics
             ScrollableTabRow(
-                selectedTabIndex = pagerState.currentPage,
+                selectedTabIndex = selectedTab,
                 edgePadding = 16.dp,
                 divider = {},
                 indicator = { tabPositions ->
-                    if (pagerState.currentPage < tabPositions.size) {
-                        val currentTabPosition = tabPositions[pagerState.currentPage]
+                    if (selectedTab < tabPositions.size) {
+                        val currentTabPosition = tabPositions[selectedTab]
                         Box(
                             Modifier
                                 .tabIndicatorOffset(currentTabPosition)
@@ -223,13 +227,14 @@ fun LibraryScreen(
                 },
             ) {
                 tabs.forEachIndexed { index, title ->
+                    val isSelected = selectedTab == index
                     Tab(
-                        selected = pagerState.currentPage == index,
+                        selected = isSelected,
                         onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
                         text = {
                             Text(
                                 title,
-                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
                     )

@@ -82,6 +82,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -546,28 +547,6 @@ private fun FullPlayerContent(
 ) {
     val episode = player.nowPlaying ?: return
 
-    var dragging by remember { mutableStateOf(false) }
-    var scrubValue by remember { mutableFloatStateOf(0f) }
-    val sliderValue = if (dragging) scrubValue else player.progress
-    // Read LibraryStore.moments directly (it is a SnapshotStateList) so the seek bar
-    // markers update live as moments are added — without needing to toggle the sheet.
-    val momentFractions = LibraryStore.moments
-        .filter { it.episodeGuid == episode.guid }
-        .map { it.positionMs.toFloat() / player.durationMs.coerceAtLeast(1L) }
-
-    var lastTick by remember { mutableIntStateOf(-1) }
-    LaunchedEffect(sliderValue, dragging) {
-        if (dragging) {
-            val tick = (sliderValue * 20).toInt()
-            if (tick != lastTick) {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                lastTick = tick
-            }
-        } else {
-            lastTick = -1
-        }
-    }
-
     var showSleepTimer by remember { mutableStateOf(false) }
     // Track the total sleep timer duration so we can show a countdown ring
     var sleepTimerTotalMs by remember { mutableLongStateOf(0L) }
@@ -878,37 +857,13 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(12.dp))
 
-        WavySeekBar(
-            fraction = sliderValue,
-            playing = player.isPlaying,
-            onScrubStart = { dragging = true },
-            onScrub = { scrubValue = it; dragging = true },
-            onScrubFinished = {
-                player.seekTo(it)
-                dragging = false
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            },
-            activeColor = MaterialTheme.colorScheme.primary,
-            inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-            thumbColor = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.fillMaxWidth(),
-            momentFractions = momentFractions,
-            heat = player.heat,
+        // Scope all frequently-changing position/progress reads to this leaf composable so
+        // the rest of the control column doesn't recompose every 250ms tick.
+        SeekSection(
+            player = player,
+            episodeGuid = episode.guid,
+            haptics = haptics,
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            val posSec = if (dragging) (scrubValue * player.durationMs / 1000).toLong().toInt()
-                         else (player.positionMs / 1000).toInt()
-            Text(
-                formatTimeSec(posSec),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                formatTimeSec((player.durationMs / 1000).toInt()),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
 
         // Personal "most replayed" jump — appears once the heatmap has learned a hot spot.
         val hottest = player.hottestFraction
@@ -1212,6 +1167,88 @@ private fun FullPlayerContent(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun SeekSection(
+    player: com.material.podcast.ui.viewmodel.PlayerViewModel,
+    episodeGuid: String,
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
+) {
+    var dragging by remember { mutableStateOf(false) }
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+
+    // Read LibraryStore.moments directly (it is a SnapshotStateList) so the seek bar
+    // markers update live as moments are added — without needing to toggle the sheet.
+    // derivedStateOf so this only recomputes when the inputs actually change, not on
+    // every position tick that recomposes this leaf.
+    val momentFractions by remember(episodeGuid) {
+        derivedStateOf {
+            LibraryStore.moments
+                .filter { it.episodeGuid == episodeGuid }
+                .map { it.positionMs.toFloat() / player.durationMs.coerceAtLeast(1L) }
+        }
+    }
+
+    // Stable lambda providing the current fraction; passed into the seek bar so the bar
+    // reads progress inside its draw phase rather than recomposing on every tick.
+    val fractionProvider = remember {
+        { if (dragging) scrubValue else player.progress }
+    }
+
+    // Drive scrub haptics off a derived tick boundary so we only fire on a real change.
+    val scrubTick by remember {
+        derivedStateOf { if (dragging) (scrubValue * 20).toInt() else -1 }
+    }
+    var lastTick by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(scrubTick, dragging) {
+        if (dragging) {
+            if (scrubTick != lastTick) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                lastTick = scrubTick
+            }
+        } else {
+            lastTick = -1
+        }
+    }
+
+    val onScrubStart = remember { { dragging = true } }
+    val onScrub = remember { { v: Float -> scrubValue = v; dragging = true } }
+    val onScrubFinished = remember {
+        { v: Float ->
+            player.seekTo(v)
+            dragging = false
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    WavySeekBar(
+        fraction = fractionProvider,
+        playing = player.isPlaying,
+        onScrubStart = onScrubStart,
+        onScrub = onScrub,
+        onScrubFinished = onScrubFinished,
+        activeColor = MaterialTheme.colorScheme.primary,
+        inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+        thumbColor = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.fillMaxWidth(),
+        momentFractions = momentFractions,
+        heat = player.heat,
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        val posSec = if (dragging) (scrubValue * player.durationMs / 1000).toLong().toInt()
+                     else (player.positionMs / 1000).toInt()
+        Text(
+            formatTimeSec(posSec),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            formatTimeSec((player.durationMs / 1000).toInt()),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

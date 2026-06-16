@@ -2,15 +2,13 @@
 
 package com.material.podcast.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,8 +67,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -233,7 +234,27 @@ fun SearchScreen(onOpenShow: (String) -> Unit) {
                 }
 
                 if (isSearching && results.isEmpty()) {
-                    items(4, key = { "shimmer_$it" }) { ShimmerResultRow() }
+                    // Single shared infinite transition for all shimmer placeholders so the
+                    // animation is driven once and read only in the draw phase (no per-frame
+                    // recomposition of the placeholder rows).
+                    item(key = "shimmer_group") {
+                        val transition = rememberInfiniteTransition(label = "shimmer")
+                        val shimmerAlpha = transition.animateFloat(
+                            initialValue = 0.3f,
+                            targetValue = 0.7f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(800, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse,
+                            ),
+                            label = "shimmerAlpha",
+                        )
+                        val shimmerColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        Column {
+                            repeat(4) {
+                                ShimmerResultRow(alphaProvider = { shimmerAlpha.value }, color = shimmerColor)
+                            }
+                        }
+                    }
                 }
 
                 if (results.isEmpty() && query.isNotBlank() && !isSearching) {
@@ -458,14 +479,20 @@ private fun SearchResultRow(
     index: Int,
     onClick: () -> Unit,
 ) {
-    var visible by remember { mutableStateOf(false) }
+    // Entrance progress 0..1, driven on the animation clock and read only in the layer
+    // phase (graphicsLayer lambda) so the row content is not recomposed each frame.
+    val progress = remember(podcast.id) { Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(podcast.id) {
         kotlinx.coroutines.delay(index * 40L)
-        visible = true
+        progress.animateTo(1f, animationSpec = tween(220))
     }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 },
+    val slidePx = with(LocalDensity.current) { 24.dp.toPx() }
+    Box(
+        modifier = Modifier.graphicsLayer {
+            val p = progress.value
+            alpha = p
+            translationY = (1f - p) * slidePx
+        },
     ) {
         Surface(
             onClick = onClick,
@@ -512,20 +539,23 @@ private fun SearchResultRow(
     }
 }
 
-/** A shimmering placeholder row shown while a search is in flight. */
+/**
+ * A shimmering placeholder row shown while a search is in flight.
+ *
+ * The animated alpha is supplied via [alphaProvider] (a lambda read only inside the draw
+ * phase) so the placeholder shape never recomposes while shimmering; only its background
+ * is redrawn each frame. All rows share one [rememberInfiniteTransition] from the caller.
+ */
 @Composable
-private fun ShimmerResultRow() {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "shimmerAlpha",
-    )
-    val base = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.25f)
+private fun ShimmerResultRow(
+    alphaProvider: () -> Float,
+    color: Color,
+) {
+    // Draw-phase background: reads alphaProvider() each frame without recomposing.
+    fun Modifier.shimmerBg(shape: androidx.compose.ui.graphics.Shape): Modifier =
+        this
+            .clip(shape)
+            .drawBehind { drawRect(color.copy(alpha = alphaProvider() * 0.25f)) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -535,8 +565,7 @@ private fun ShimmerResultRow() {
         Box(
             modifier = Modifier
                 .size(60.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(base),
+                .shimmerBg(RoundedCornerShape(14.dp)),
         )
         Spacer(Modifier.size(14.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -544,15 +573,13 @@ private fun ShimmerResultRow() {
                 modifier = Modifier
                     .fillMaxWidth(0.7f)
                     .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(base),
+                    .shimmerBg(RoundedCornerShape(7.dp)),
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.45f)
                     .height(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(base),
+                    .shimmerBg(RoundedCornerShape(6.dp)),
             )
         }
     }

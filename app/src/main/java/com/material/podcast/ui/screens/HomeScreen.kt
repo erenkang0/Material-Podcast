@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -377,20 +378,22 @@ private fun StaggeredRow(
         delay(index * 80L)
         visible = true
     }
-    val alpha by animateFloatAsState(
+    val alpha = animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "rowAlpha_$index",
     )
-    val offsetY by animateFloatAsState(
+    val offsetY = animateFloatAsState(
         targetValue = if (visible) 0f else 32f,
         animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
         label = "rowOffset_$index",
     )
     Box(
+        // Read the animated values inside the graphicsLayer lambda so the
+        // entrance runs in the draw/layer phase without recomposing content.
         modifier = Modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = offsetY
+            this.alpha = alpha.value
+            translationY = offsetY.value
         },
     ) {
         content()
@@ -404,7 +407,7 @@ private fun StaggeredRow(
 @Composable
 private fun EmptyStateShimmer(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerAlpha by infiniteTransition.animateFloat(
+    val shimmerAlpha = infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.7f,
         animationSpec = infiniteRepeatable(
@@ -413,6 +416,8 @@ private fun EmptyStateShimmer(modifier: Modifier = Modifier) {
         ),
         label = "shimmerAlpha",
     )
+    val shimmerColor = MaterialTheme.colorScheme.onSurface
+    val barShape = MaterialTheme.shapes.small
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -423,10 +428,12 @@ private fun EmptyStateShimmer(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxWidth(fraction)
                     .height(14.dp)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha * 0.15f),
-                    ),
+                    .clip(barShape)
+                    // Read the animated alpha in the draw phase so the shimmer
+                    // pulse does not recompose this composable every frame.
+                    .drawBehind {
+                        drawRect(color = shimmerColor.copy(alpha = shimmerAlpha.value * 0.15f))
+                    },
             )
         }
     }
@@ -445,7 +452,7 @@ private fun HeroFeaturedCard(
     val context = LocalContext.current
 
     val infiniteTransition = rememberInfiniteTransition(label = "heroPulse")
-    val gradientAlpha by infiniteTransition.animateFloat(
+    val gradientAlpha = infiniteTransition.animateFloat(
         initialValue = 0.40f,
         targetValue = 0.65f,
         animationSpec = infiniteRepeatable(
@@ -473,19 +480,24 @@ private fun HeroFeaturedCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-            // Animated gradient overlay
+            // Animated gradient overlay. The pulse alpha is read inside
+            // drawBehind so the animation stays in the draw phase and does not
+            // recompose the hero card every frame.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = gradientAlpha * 0.4f),
-                                Color.Black.copy(alpha = gradientAlpha),
+                    .drawBehind {
+                        val a = gradientAlpha.value
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = a * 0.4f),
+                                    Color.Black.copy(alpha = a),
+                                ),
                             ),
-                        ),
-                    ),
+                        )
+                    },
             )
             Column(
                 modifier = Modifier

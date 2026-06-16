@@ -91,6 +91,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -157,27 +158,30 @@ fun ShowDetailsScreen(
     val seed = artworkColorSeed
     val seedColor = if (seed != 0) Color(seed) else baseScheme.primary
 
-    val targetPrimary = if (seed != 0) lerp(baseScheme.primary, seedColor, if (isDark) 0.30f else 0.22f) else baseScheme.primary
-    val targetPrimaryContainer = if (seed != 0) lerp(baseScheme.primaryContainer, seedColor, if (isDark) 0.32f else 0.26f) else baseScheme.primaryContainer
-    val targetSecondaryContainer = if (seed != 0) lerp(baseScheme.secondaryContainer, seedColor, if (isDark) 0.22f else 0.18f) else baseScheme.secondaryContainer
-    val targetSurface = if (seed != 0) lerp(baseScheme.surface, seedColor, if (isDark) 0.08f else 0.05f) else baseScheme.surface
-    val targetBackground = if (seed != 0) lerp(baseScheme.background, seedColor, if (isDark) 0.08f else 0.05f) else baseScheme.background
-    val targetSurfaceVariant = if (seed != 0) lerp(baseScheme.surfaceVariant, seedColor, if (isDark) 0.10f else 0.07f) else baseScheme.surfaceVariant
+    // Each role is the base color lerped toward the SAME seed with a fixed per-role weight,
+    // all on the same 700ms tween. So instead of 6 animateColorAsState (6 animation
+    // subscriptions, each recomposing the whole page every frame), drive a single 0->1
+    // float and compute the six colors from it. Visual result is identical.
+    val fullPrimary = if (seed != 0) lerp(baseScheme.primary, seedColor, if (isDark) 0.30f else 0.22f) else baseScheme.primary
+    val fullPrimaryContainer = if (seed != 0) lerp(baseScheme.primaryContainer, seedColor, if (isDark) 0.32f else 0.26f) else baseScheme.primaryContainer
+    val fullSecondaryContainer = if (seed != 0) lerp(baseScheme.secondaryContainer, seedColor, if (isDark) 0.22f else 0.18f) else baseScheme.secondaryContainer
+    val fullSurface = if (seed != 0) lerp(baseScheme.surface, seedColor, if (isDark) 0.08f else 0.05f) else baseScheme.surface
+    val fullBackground = if (seed != 0) lerp(baseScheme.background, seedColor, if (isDark) 0.08f else 0.05f) else baseScheme.background
+    val fullSurfaceVariant = if (seed != 0) lerp(baseScheme.surfaceVariant, seedColor, if (isDark) 0.10f else 0.07f) else baseScheme.surfaceVariant
 
-    val dynPrimary by animateColorAsState(targetPrimary, tween(700), label = "dynPrimary")
-    val dynPrimaryContainer by animateColorAsState(targetPrimaryContainer, tween(700), label = "dynPrimaryContainer")
-    val dynSecondaryContainer by animateColorAsState(targetSecondaryContainer, tween(700), label = "dynSecondaryContainer")
-    val dynSurface by animateColorAsState(targetSurface, tween(700), label = "dynSurface")
-    val dynBackground by animateColorAsState(targetBackground, tween(700), label = "dynBackground")
-    val dynSurfaceVariant by animateColorAsState(targetSurfaceVariant, tween(700), label = "dynSurfaceVariant")
+    val colorProgress by animateFloatAsState(
+        targetValue = if (seed != 0) 1f else 0f,
+        animationSpec = tween(700),
+        label = "dynColorProgress",
+    )
 
     val dynamicScheme = if (seed != 0) baseScheme.copy(
-        primary = dynPrimary,
-        primaryContainer = dynPrimaryContainer,
-        secondaryContainer = dynSecondaryContainer,
-        surface = dynSurface,
-        background = dynBackground,
-        surfaceVariant = dynSurfaceVariant,
+        primary = lerp(baseScheme.primary, fullPrimary, colorProgress),
+        primaryContainer = lerp(baseScheme.primaryContainer, fullPrimaryContainer, colorProgress),
+        secondaryContainer = lerp(baseScheme.secondaryContainer, fullSecondaryContainer, colorProgress),
+        surface = lerp(baseScheme.surface, fullSurface, colorProgress),
+        background = lerp(baseScheme.background, fullBackground, colorProgress),
+        surfaceVariant = lerp(baseScheme.surfaceVariant, fullSurfaceVariant, colorProgress),
     ) else baseScheme
 
     MaterialTheme(colorScheme = dynamicScheme) {
@@ -515,9 +519,11 @@ private fun SuccessContent(
                 items(yearEpisodes, key = { it.guid }) { episode ->
                     EpisodeListItem(
                         episode = episode,
-                        onPlay = {
-                            player.play(episode, episodes)
-                            player.expandSheet = true
+                        onPlay = remember(episode.guid) {
+                            {
+                                player.play(episode, episodes)
+                                player.expandSheet = true
+                            }
                         },
                         isDownloaded = LibraryStore.isDownloaded(episode.guid),
                         modifier = Modifier.animateItem(),
@@ -705,15 +711,19 @@ private fun PodcastHeader(
     }
     val animatedTint by animateColorAsState(tintTarget, tween(600), label = "headerTint")
 
+    // Read the animated tint in the draw phase via drawBehind so the header subtree
+    // (artwork, title, chips) does NOT recompose on every color animation frame.
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(animatedTint, Color.Transparent),
-                    endY = 420f,
-                ),
-            ),
+            .drawBehind {
+                drawRect(
+                    Brush.verticalGradient(
+                        colors = listOf(animatedTint, Color.Transparent),
+                        endY = 420f,
+                    ),
+                )
+            },
     ) {
     Row(
         modifier = Modifier

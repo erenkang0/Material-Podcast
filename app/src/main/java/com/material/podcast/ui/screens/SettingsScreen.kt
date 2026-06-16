@@ -8,11 +8,9 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,6 +62,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -97,9 +97,16 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
     fun tapLight() = haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     fun tapStrong() = haptics.performHapticFeedback(HapticFeedbackType.LongPress)
 
+    // Shared entrance progress (0f -> 1f) driving all staggered reveals via the
+    // graphics layer phase, so card content is not recomposed every frame.
+    val revealProgress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        revealProgress.animateTo(1f, animationSpec = tween(durationMillis = 700, easing = LinearOutSlowInEasing))
+    }
+
     // Flat list of all settings items for search
     data class SettingsItem(val keys: List<String>, val section: String)
-    val allItems = listOf(
+    val allItems = remember(currentLang) { listOf(
         SettingsItem(listOf(tr("Renk teması", "Color theme"), tr("Paletini seç", "Choose your palette")), tr("Görünüm", "Appearance")),
         SettingsItem(listOf(tr("Dil", "Language"), "Türkçe", "English"), tr("Görünüm", "Appearance")),
         SettingsItem(listOf(tr("Varsayılan hız", "Default speed")), tr("Oynatma", "Playback")),
@@ -108,7 +115,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
         SettingsItem(listOf(tr("Yalnızca Wi-Fi'de otomatik indir", "Auto-download on Wi-Fi only")), tr("Arka plan", "Background")),
         SettingsItem(listOf(tr("Verilerini yedekle", "Back up your data")), tr("Yedekleme", "Backup")),
         SettingsItem(listOf(tr("Sürüm", "Version"), "Echoes", BuildConfig.VERSION_NAME), tr("Hakkında", "About")),
-    )
+    ) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -146,7 +153,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
         ) {
             // ── Hero header ──────────────────────────────────────────────────
             item {
-                StaggeredReveal(index = 0) {
+                StaggeredReveal(index = 0, progress = { revealProgress.value }) {
                     HeroHeader(
                         title = tr("Ayarlar", "Settings"),
                         subtitle = tr("Echoes'u kendine göre ayarla", "Tune Echoes to your taste"),
@@ -156,7 +163,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
 
             // ── Search ───────────────────────────────────────────────────────
             item {
-                StaggeredReveal(index = 1) {
+                StaggeredReveal(index = 1, progress = { revealProgress.value }) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -199,7 +206,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
             } else {
                 // ── Appearance ───────────────────────────────────────────────
                 item {
-                    StaggeredReveal(index = 2) {
+                    StaggeredReveal(index = 2, progress = { revealProgress.value }) {
                         SettingsCard(
                             title = tr("Görünüm", "Appearance"),
                             accent = MaterialTheme.colorScheme.primary,
@@ -265,7 +272,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
 
                 // ── Playback ─────────────────────────────────────────────────
                 item {
-                    StaggeredReveal(index = 3) {
+                    StaggeredReveal(index = 3, progress = { revealProgress.value }) {
                         SettingsCard(
                             title = tr("Oynatma", "Playback"),
                             accent = MaterialTheme.colorScheme.secondary,
@@ -323,7 +330,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
 
                 // ── Background / battery ─────────────────────────────────────
                 item {
-                    StaggeredReveal(index = 4) {
+                    StaggeredReveal(index = 4, progress = { revealProgress.value }) {
                         SettingsCard(
                             title = tr("Arka plan", "Background"),
                             accent = MaterialTheme.colorScheme.tertiary,
@@ -377,7 +384,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
 
                 // ── Backup ───────────────────────────────────────────────────
                 item {
-                    StaggeredReveal(index = 5) {
+                    StaggeredReveal(index = 5, progress = { revealProgress.value }) {
                         SettingsCard(
                             title = tr("Yedekleme", "Backup"),
                             accent = MaterialTheme.colorScheme.primary,
@@ -415,7 +422,7 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
 
                 // ── About card ───────────────────────────────────────────────
                 item {
-                    StaggeredReveal(index = 6) {
+                    StaggeredReveal(index = 6, progress = { revealProgress.value }) {
                         AboutCard(
                             aboutLabel = tr("Hakkında", "About"),
                         )
@@ -431,6 +438,9 @@ fun SettingsScreen(onOpenThemes: () -> Unit, onOpenEqualizer: () -> Unit = {}) {
 @Composable
 private fun HeroHeader(title: String, subtitle: String) {
     val cs = MaterialTheme.colorScheme
+    val heroBrush = remember(cs.primaryContainer, cs.tertiaryContainer) {
+        Brush.linearGradient(listOf(cs.primaryContainer, cs.tertiaryContainer))
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
@@ -440,11 +450,7 @@ private fun HeroHeader(title: String, subtitle: String) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(cs.primaryContainer, cs.tertiaryContainer),
-                    ),
-                )
+                .background(heroBrush)
                 .padding(24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -548,6 +554,9 @@ private fun SettingsRow(
 @Composable
 private fun AboutCard(aboutLabel: String) {
     val cs = MaterialTheme.colorScheme
+    val logoBrush = remember(cs.primary, cs.tertiary) {
+        Brush.linearGradient(listOf(cs.primary, cs.tertiary))
+    }
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -581,11 +590,7 @@ private fun AboutCard(aboutLabel: String) {
                     modifier = Modifier
                         .size(72.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(cs.primary, cs.tertiary),
-                            ),
-                        ),
+                        .background(logoBrush),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -644,16 +649,18 @@ private fun AboutCard(aboutLabel: String) {
 }
 
 @Composable
-private fun StaggeredReveal(index: Int, content: @Composable () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { visible = true }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(300, delayMillis = index * 60)) +
-            slideInVertically(
-                animationSpec = tween(360, delayMillis = index * 60, easing = LinearOutSlowInEasing),
-                initialOffsetY = { it / 6 },
-            ),
+private fun StaggeredReveal(index: Int, progress: () -> Float, content: @Composable () -> Unit) {
+    // Map the shared 0..1 progress into a per-index staggered local progress and
+    // drive alpha/translation in the graphics-layer phase so content composes once.
+    Box(
+        modifier = Modifier.graphicsLayer {
+            val start = (index * 0.06f).coerceIn(0f, 0.9f)
+            val window = 0.4f
+            val local = ((progress() - start) / window).coerceIn(0f, 1f)
+            alpha = local
+            // ~16dp slide-in from below, fully resolved when local == 1f.
+            translationY = (1f - local) * 16.dp.toPx()
+        },
     ) {
         content()
     }
