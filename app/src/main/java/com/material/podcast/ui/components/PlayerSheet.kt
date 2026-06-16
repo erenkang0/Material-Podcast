@@ -631,13 +631,21 @@ private fun FullPlayerContent(
     if (showSnip) {
         val durationSec = (player.durationMs / 1000f).coerceAtLeast(1f)
         val curSec = (player.positionMs / 1000f).coerceIn(0f, durationSec)
-        // Default selection: ~30s ending at the current position.
+        // Show only a 60-second window of the timeline (not the whole episode) so the handles
+        // are easy to drag for precise selection. The window follows playback — as the audio
+        // advances, the visible 60s slides forward ("ilerleyince ilerlesin").
+        val windowLen = 60f
+        val winStart = (curSec - 45f).coerceIn(0f, (durationSec - windowLen).coerceAtLeast(0f))
+        val winEnd = (winStart + windowLen).coerceAtMost(durationSec)
+
+        // Default selection: ~15s ending at the current position.
         var snipRange by remember {
-            mutableStateOf((curSec - 30f).coerceAtLeast(0f)..curSec)
+            mutableStateOf((curSec - 15f).coerceAtLeast(0f)..curSec)
         }
-        val startSel = snipRange.start
-        val endSel = snipRange.endInclusive
-        val lengthSel = (endSel - startSel).toInt()
+        // Keep the selection inside the visible window.
+        val selStart = snipRange.start.coerceIn(winStart, winEnd)
+        val selEnd = snipRange.endInclusive.coerceIn(selStart, winEnd)
+        val lengthSel = (selEnd - selStart).toInt()
 
         AlertDialog(
             onDismissRequest = { showSnip = false },
@@ -645,14 +653,14 @@ private fun FullPlayerContent(
             text = {
                 Column {
                     Text(
-                        "Paylaşılacak bölümü seç, dilersen önce dinle.",
+                        "60 sn'lik pencerede paylaşılacak bölümü seç; çaldıkça pencere ilerler. Dilersen önce dinle.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(
-                            formatTimeSec(startSel.toInt()),
+                            formatTimeSec(selStart.toInt()),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -662,34 +670,34 @@ private fun FullPlayerContent(
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
-                            formatTimeSec(endSel.toInt()),
+                            formatTimeSec(selEnd.toInt()),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
                     androidx.compose.material3.RangeSlider(
-                        value = snipRange,
+                        value = selStart..selEnd,
                         onValueChange = { range ->
                             var s = range.start
                             var e = range.endInclusive
-                            // Constrain selected length to 5..90 seconds.
+                            // Constrain selected length to 5..60 seconds within the window.
                             val len = e - s
                             if (len < 5f) {
-                                if (s == snipRange.start) e = (s + 5f).coerceAtMost(durationSec)
-                                else s = (e - 5f).coerceAtLeast(0f)
-                            } else if (len > 90f) {
-                                if (s == snipRange.start) e = s + 90f
-                                else s = e - 90f
+                                if (s == selStart) e = (s + 5f).coerceAtMost(winEnd)
+                                else s = (e - 5f).coerceAtLeast(winStart)
+                            } else if (len > 60f) {
+                                if (s == selStart) e = s + 60f
+                                else s = e - 60f
                             }
                             snipRange = s..e
                         },
-                        valueRange = 0f..durationSec,
+                        valueRange = winStart..winEnd,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
                     TextButton(
                         onClick = {
-                            player.seekToMs((startSel * 1000L).toLong())
+                            player.seekToMs((selStart * 1000L).toLong())
                             if (!player.isPlaying) player.togglePlayPause()
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         },
@@ -703,7 +711,7 @@ private fun FullPlayerContent(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    startSnip((startSel * 1000L).toLong(), (endSel * 1000L).toLong())
+                    startSnip((selStart * 1000L).toLong(), (selEnd * 1000L).toLong())
                 }) { Text("Oluştur") }
             },
             dismissButton = { TextButton(onClick = { showSnip = false }) { Text("İptal") } },
