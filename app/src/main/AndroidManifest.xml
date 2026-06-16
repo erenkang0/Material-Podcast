@@ -11,8 +11,6 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.NFC" />
 
-    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
-
     <application
         android:name=".EchoesApplication"
         android:allowBackup="true"
@@ -44,8 +42,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="echoes" android:host="moment" />
             </intent-filter>
-            <!-- NFC tag dispatch: when another Echoes phone (in HCE mode) is tapped, the OS
-                 reads its NDEF URI record and routes it here even when the app is closed. -->
+            <!-- NFC tag dispatch: deep link arrives via NDEF_DISCOVERED even when app is closed. -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -57,18 +54,6 @@
                 <data android:scheme="echoes" android:host="moment" />
             </intent-filter>
         </activity>
-
-        <service
-            android:name=".nfc.NfcShareApduService"
-            android:exported="true"
-            android:permission="android.permission.BIND_NFC_SERVICE">
-            <intent-filter>
-                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.nfc.cardemulation.host_apdu_service"
-                android:resource="@xml/apduservice" />
-        </service>
 
         <service
             android:name=".media.PlaybackService"
