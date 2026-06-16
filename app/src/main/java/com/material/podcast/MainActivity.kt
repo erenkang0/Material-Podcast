@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
@@ -271,7 +272,12 @@ private fun PodcastApp(themeController: ThemeController) {
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
             ) {
-                Column {
+                // When the bottom nav is visible it supplies its own navigation-bar inset; on
+                // screens without it (e.g. ShowDetails) the mini bar needs that inset itself so it
+                // doesn't sit flush against the system gesture area.
+                Column(
+                    modifier = if (showBottomBar) Modifier else Modifier.navigationBarsPadding(),
+                ) {
                     AnimatedVisibility(
                         visible = player.nowPlaying != null,
                         enter = slideInVertically { it } + fadeIn(),

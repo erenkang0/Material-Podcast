@@ -31,6 +31,7 @@ object TranscriptParser {
         val cues = when {
             trimmed.startsWith("{") || trimmed.startsWith("[") -> parseJson(trimmed)
             timeArrow.containsMatchIn(trimmed) -> parseCueBlocks(trimmed)
+            looksLikeHtml(trimmed) -> parseHtml(trimmed)
             else -> parsePlain(trimmed)
         }
         // Sort timed cues by position but keep untimed ones in their original order at the end.
@@ -116,6 +117,50 @@ object TranscriptParser {
         }
         return ""
     }
+
+    private fun looksLikeHtml(content: String): Boolean {
+        val head = content.take(400)
+        return head.startsWith("<") ||
+            head.contains("<!doctype", ignoreCase = true) ||
+            content.contains("</p>", ignoreCase = true) ||
+            content.contains("<br", ignoreCase = true) ||
+            content.contains("</div>", ignoreCase = true)
+    }
+
+    /**
+     * HTML transcript (many `<podcast:transcript type="text/html">` documents): turn block-level
+     * boundaries into paragraph breaks, strip the remaining tags and decode entities, then surface
+     * one untimed cue per paragraph so the text is readable instead of one giant blob.
+     */
+    private fun parseHtml(content: String): List<TranscriptCue> {
+        val withBreaks = content.replace(
+            Regex("(?i)</p>|<br\\s*/?>|</div>|</li>|</h[1-6]>|</tr>"),
+            "\n",
+        )
+        val stripped = tag.replace(withBreaks, "")
+        return decodeEntities(stripped)
+            .replace("\r\n", "\n").replace("\r", "\n")
+            .split("\n")
+            .map { it.replace(Regex("[ \t]+"), " ").trim() }
+            .filter { it.isNotEmpty() }
+            .map { TranscriptCue(-1L, it) }
+    }
+
+    private fun decodeEntities(s: String): String = s
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&mdash;", "—")
+        .replace("&ndash;", "–")
+        .replace("&hellip;", "…")
+        .replace("&rsquo;", "'")
+        .replace("&lsquo;", "'")
+        .replace("&ldquo;", "\"")
+        .replace("&rdquo;", "\"")
 
     /** Plain text: one cue per non-empty line, untimed. */
     private fun parsePlain(content: String): List<TranscriptCue> {
