@@ -38,6 +38,24 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="echoes" android:host="share" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="echoes" android:host="moment" />
+            </intent-filter>
+            <!-- NFC tag dispatch: when another Echoes phone (in HCE mode) is tapped, the OS
+                 reads its NDEF URI record and routes it here even when the app is closed. -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="echoes" android:host="share" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="echoes" android:host="moment" />
+            </intent-filter>
         </activity>
 
         <service

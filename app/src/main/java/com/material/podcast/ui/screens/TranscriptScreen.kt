@@ -11,7 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -104,6 +104,24 @@ fun TranscriptScreen(onBack: () -> Unit) {
         )
     }
 
+    // Long-pressing a line offers to turn that quote into a shareable Moment Card.
+    var cardCue by remember { mutableStateOf<TranscriptCue?>(null) }
+    cardCue?.let { cue ->
+        if (episode != null) {
+            com.material.podcast.ui.components.MomentCardSheet(
+                guid = episode.guid,
+                title = episode.title,
+                podcastTitle = episode.podcastTitle,
+                artworkUrl = episode.artworkUrl,
+                audioUrl = episode.audioUrl,
+                startMs = if (cue.startMs >= 0) cue.startMs else player.positionMs,
+                seedColor = player.artworkColorSeed,
+                initialQuote = cue.text,
+                onDismiss = { cardCue = null },
+            )
+        }
+    }
+
     LaunchedEffect(episode?.guid) {
         loading = true
         cues = episode?.let {
@@ -167,6 +185,7 @@ fun TranscriptScreen(onBack: () -> Unit) {
                         accent = accent,
                         listState = listState,
                         onSeek = { player.seekToMs(it) },
+                        onLongPress = { cardCue = it },
                     )
                 } else {
                     LyricsFlow(
@@ -176,6 +195,7 @@ fun TranscriptScreen(onBack: () -> Unit) {
                         accent = accent,
                         listState = listState,
                         onSeek = { player.seekToMs(it) },
+                        onLongPress = { cardCue = it },
                     )
                 }
 
@@ -319,6 +339,7 @@ private fun LyricsFlow(
     accent: Color,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onSeek: (Long) -> Unit,
+    onLongPress: (TranscriptCue) -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -342,11 +363,13 @@ private fun LyricsFlow(
                 accent = accent,
                 seekable = cue.startMs >= 0,
                 onClick = { if (cue.startMs >= 0) onSeek(cue.startMs) },
+                onLongClick = { onLongPress(cue) },
             )
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun LyricLine(
     cue: TranscriptCue,
@@ -356,6 +379,7 @@ private fun LyricLine(
     accent: Color,
     seekable: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val targetAlpha = when {
         isCurrent -> 1f
@@ -383,17 +407,18 @@ private fun LyricLine(
             .fillMaxWidth()
             .alpha(alpha)
             .clip(RoundedCornerShape(14.dp))
-            .clickable(
-                enabled = seekable,
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = { if (seekable) onClick() },
+                onLongClick = onLongClick,
             )
             .padding(vertical = 10.dp),
     )
 }
 
 /** Compact searchable list shown while the user is searching. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun SearchableList(
     filtered: List<TranscriptCue>,
@@ -402,6 +427,7 @@ private fun SearchableList(
     accent: Color,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onSeek: (Long) -> Unit,
+    onLongPress: (TranscriptCue) -> Unit,
 ) {
     if (filtered.isEmpty()) {
         Box(
@@ -432,7 +458,10 @@ private fun SearchableList(
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable(enabled = seekable) { if (seekable) onSeek(cue.startMs) }
+                    .combinedClickable(
+                        onClick = { if (seekable) onSeek(cue.startMs) },
+                        onLongClick = { onLongPress(cue) },
+                    )
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
                 if (seekable) {

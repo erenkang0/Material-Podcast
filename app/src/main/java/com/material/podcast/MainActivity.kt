@@ -3,6 +3,9 @@ package com.material.podcast
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.nfc.NfcAdapter
+import android.nfc.Tag
+import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -61,6 +64,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import com.material.podcast.nfc.MomentShareController
 import com.material.podcast.nfc.NfcShareController
 import com.material.podcast.ui.components.NfcShareSheet
 import androidx.compose.ui.res.stringResource
@@ -87,6 +91,63 @@ import com.material.podcast.ui.theme.rememberThemeController
 import com.material.podcast.ui.viewmodel.PlayerViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
+
+    /**
+     * Reader-mode callback: while this phone is *receiving* (not actively sending a share), it
+     * polls for NFC tags. Another Echoes phone in HCE mode looks like a Type-4 NDEF tag carrying
+     * our `echoes://…` URI record — we read it directly here so a share lands even without relying
+     * on the system's tag-dispatch intent.
+     */
+    private val readerCallback = NfcAdapter.ReaderCallback { tag: Tag ->
+        readEchoesUri(tag)?.let { uri ->
+            runOnUiThread { NfcShareController.onReceived(uri) }
+        }
+    }
+
+    private fun readEchoesUri(tag: Tag): String? {
+        val ndef = Ndef.get(tag) ?: return null
+        return try {
+            ndef.connect()
+            val message = ndef.ndefMessage ?: ndef.cachedNdefMessage
+            message?.records?.firstNotNullOfOrNull { record ->
+                runCatching { record.toUri()?.toString() }.getOrNull()
+                    ?.takeIf { it.startsWith("echoes://") }
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { ndef.close() }
+        }
+    }
+
+    /**
+     * Reader mode and host-card-emulation can't run at once on the same NFC controller, so we only
+     * poll for incoming shares while we aren't broadcasting one ([NfcShareController.activeShare]
+     * is null). Called from [onResume] and whenever the active-share state flips.
+     */
+    private fun updateNfcReaderMode() {
+        val adapter = nfcAdapter ?: return
+        if (NfcShareController.activeShare == null) {
+            val flags = NfcAdapter.FLAG_READER_NFC_A or
+                NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
+            adapter.enableReaderMode(this, readerCallback, flags, null)
+        } else {
+            adapter.disableReaderMode(this)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateNfcReaderMode()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nfcAdapter?.disableReaderMode(this)
+    }
 
     override fun attachBaseContext(newBase: Context) {
         val lang = SettingsStore.getLanguage(newBase)
@@ -127,6 +188,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                    // Toggle NFC reader mode whenever we start/stop broadcasting a share, so the
+                    // controller flips between host-card-emulation (sending) and reader (receiving).
+                    LaunchedEffect(NfcShareController.activeShare) { updateNfcReaderMode() }
                     if (NfcShareController.activeShare != null) {
                         NfcShareSheet(onDismiss = { NfcShareController.stopShare() })
                     }
@@ -145,11 +209,13 @@ class MainActivity : ComponentActivity() {
         handleShareIntent(intent)
     }
 
-    /** Route an incoming `echoes://share?…` deep link (NFC NDEF dispatch or browser) to the controller. */
+    /** Route an incoming `echoes://…` deep link (NFC NDEF dispatch or browser) to a controller. */
     private fun handleShareIntent(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme == "echoes" && data.host == "share") {
-            NfcShareController.onReceived(data.toString())
+        if (data.scheme != "echoes") return
+        when (data.host) {
+            "share" -> NfcShareController.onReceived(data.toString())
+            "moment" -> MomentShareController.onReceived(data.toString())
         }
     }
 }
@@ -289,6 +355,17 @@ private fun PodcastApp(themeController: ThemeController) {
                 navController.navigate(Screen.Chapters.route)
             },
         )
+    }
+
+    // A playable moment link was received: jump straight into playback at the shared second.
+    val pendingMoment = MomentShareController.pendingMoment
+    LaunchedEffect(pendingMoment) {
+        if (pendingMoment != null) {
+            val episode = MomentShareController.toEpisode(pendingMoment)
+            player.play(episode, startPositionMs = pendingMoment.startMs)
+            player.expandSheet = true
+            MomentShareController.pendingMoment = null
+        }
     }
 
     // A share was received: show a brief "açılıyor" overlay, then navigate to the show.

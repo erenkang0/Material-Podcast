@@ -2,6 +2,27 @@
 
 ## v1.0.0 — 2026-06-16
 
+### Kişisel Tekrar Isı Haritası
+- Uygulama, geri sarıp tekrar dinlediğin saniyeleri sessizce öğrenir ve oynatma çubuğunun altına sıcak bir parıltı olarak çizer. En çok tekrar dinlediğin ana tek dokunuşla atlayan bir kısayol çıkar. Tamamen cihazda, kişisel.
+
+### Anı Kartı Stüdyosu
+- Herhangi bir transkript satırına uzun bas ya da oynatıcıdaki kart butonuna dokun: o anı kapak renklerinden türeyen şık bir kareye dönüştür, alıntıyı düzenle ve paylaş. Paylaşılan bağlantı, karşı tarafta uygulamayı **tam o saniyeden** açıp oynatır.
+
+### NFC Onarıldı
+- Alıcı taraf artık NFC okuyucu modunda dinliyor ve manifest'e NDEF yönlendirme filtresi eklendi; iki telefon temas ettiğinde paylaşım gerçekten karşıya geçiyor (uygulama kapalıyken bile).
+
+### Tek Bildirimde İndirme
+- Aynı anda birden çok bölüm inerken artık tek bir birleşik bildirim gösterilir ("3 bölüm indiriliyor"), bildirim yağmuru ve takılma sona erdi.
+
+### Emojisiz Arayüz
+- Selamlama, rozetler ve istatistik satırları dahil tüm arayüz emojileri kaldırıldı.
+
+### Gizli Elden Ring Teması (Easter egg)
+- Tema renklerinde **Amber**'e 6 kez dokun; kararmış altın tonlu, kül-siyah yüzeyli gotik bir tema açılır.
+
+### Daha İyi Transkript Bulma
+- Transkript yalnızca RSS etiketinden değil; ses URL'sinden türetilen `.vtt/.srt/.json` adaylarından ve bölüm açıklamasındaki bağlantılardan da denenir.
+
 ### 🎧 Tam Ekran Transkript (Apple Music tarzı)
 - Transkript artık tam ekran ve kapak renklerinden türeyen arka planla; çalan satır büyük ve ortada, akıcı karaoke akışı. Satıra dokununca atlama, arama, transkript yoksa **Kapat** butonu.
 

@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCut
@@ -61,7 +62,9 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Subject
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -573,7 +576,22 @@ private fun FullPlayerContent(
     var snipExporting by remember { mutableStateOf(false) }
     var showAddToPlaylist by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
+    var showMomentCard by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (showMomentCard) {
+        MomentCardSheet(
+            guid = episode.guid,
+            title = episode.title,
+            podcastTitle = episode.podcastTitle,
+            artworkUrl = episode.artworkUrl,
+            audioUrl = episode.audioUrl,
+            startMs = player.positionMs,
+            seedColor = player.artworkColorSeed,
+            initialQuote = episode.title,
+            onDismiss = { showMomentCard = false },
+        )
+    }
 
     if (showQueueSheet) {
         QueueBottomSheet(
@@ -875,6 +893,7 @@ private fun FullPlayerContent(
             thumbColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier.fillMaxWidth(),
             momentFractions = momentFractions,
+            heat = player.heat,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             val posSec = if (dragging) (scrubValue * player.durationMs / 1000).toLong().toInt()
@@ -888,6 +907,28 @@ private fun FullPlayerContent(
                 formatTimeSec((player.durationMs / 1000).toInt()),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Personal "most replayed" jump — appears once the heatmap has learned a hot spot.
+        val hottest = player.hottestFraction
+        if (hottest != null && player.durationMs > 0) {
+            Spacer(Modifier.height(6.dp))
+            val hotSec = (hottest * player.durationMs / 1000).toInt()
+            AssistChip(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    player.seekToHottest()
+                },
+                label = { Text("En çok tekrar dinlediğin an · ${formatTimeSec(hotSec)}") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Rounded.Whatshot,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = androidx.compose.ui.graphics.Color(0xFFFF7043),
+                    )
+                },
             )
         }
 
@@ -1144,6 +1185,16 @@ private fun FullPlayerContent(
                 Icon(
                     Icons.Rounded.BookmarkAdd,
                     "Favori an ekle",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                showMomentCard = true
+            }) {
+                Icon(
+                    Icons.Rounded.AutoAwesome,
+                    "Anı kartı oluştur",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

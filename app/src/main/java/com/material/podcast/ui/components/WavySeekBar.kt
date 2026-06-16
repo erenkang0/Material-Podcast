@@ -46,6 +46,8 @@ fun WavySeekBar(
     thumbColor: Color,
     modifier: Modifier = Modifier,
     momentFractions: List<Float> = emptyList(),
+    heat: List<Float> = emptyList(),
+    heatColor: Color = Color(0xFFFF7043),
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
@@ -134,6 +136,30 @@ fun WavySeekBar(
         val thumbX = startX + trackWidth * fraction.coerceIn(0f, 1f)
         // Small gap on either side of the thumb, matching the M3 Slider look.
         val gap = thumbR * 0.6f
+
+        // Personal replay heatmap — a soft warm glow under the track, hotter where the user has
+        // rewound to re-listen. Drawn first so the wave and thumb sit on top of it.
+        if (heat.isNotEmpty()) {
+            val maxGlow = with(density) { 13.dp.toPx() }
+            for (i in heat.indices) {
+                val h = heat[i]
+                if (h <= 0.04f) continue
+                val bx = startX + trackWidth * ((i + 0.5f) / heat.size)
+                // Two stacked circles: a wide faint halo plus a tighter brighter core.
+                drawCircle(
+                    color = heatColor,
+                    radius = maxGlow * (0.5f + 0.5f * h),
+                    center = Offset(bx, centerY),
+                    alpha = 0.10f + 0.22f * h,
+                )
+                drawCircle(
+                    color = heatColor,
+                    radius = (maxGlow * 0.5f) * (0.4f + 0.6f * h),
+                    center = Offset(bx, centerY),
+                    alpha = 0.18f + 0.30f * h,
+                )
+            }
+        }
 
         // Active (played) portion — an animated squiggle (M3 Expressive).
         val activeEnd = thumbX - gap

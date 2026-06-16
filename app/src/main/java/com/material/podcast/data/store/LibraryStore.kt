@@ -36,6 +36,11 @@ object LibraryStore {
     private const val KEY_STATS = "listen_stats"
     private const val KEY_PLAYLISTS = "playlists"
     private const val KEY_HISTORY = "play_history"
+    private const val KEY_HEAT = "replay_heat"
+
+    /** Resolution of the per-episode replay heatmap (buckets across the whole episode). */
+    const val HEAT_BUCKETS = 48
+    private const val HEAT_MAX_COUNT = 30 // cap so a single obsessively-replayed spot can't dwarf all
 
     const val MAX_CATEGORIES = 10
     private const val MAX_RESUME = 40
@@ -62,6 +67,9 @@ object LibraryStore {
     val recentPodcasts: SnapshotStateList<Podcast> = mutableStateListOf()
     val playlists: SnapshotStateList<Playlist> = mutableStateListOf()
 
+    // Personal replay heatmap: guid -> per-bucket replay counts across the episode.
+    private val heatMap = mutableMapOf<String, IntArray>()
+
     // Listening stats (in-memory accumulators, flushed to disk periodically).
     private var statTotalMs = 0L
     private val statPerPodcast = mutableMapOf<String, Long>()
@@ -82,6 +90,15 @@ object LibraryStore {
 
         val savedCategories = load(KEY_CATEGORIES, object : TypeToken<List<ExploreCategory>>() {})
         categories.addAll(savedCategories.ifEmpty { defaultCategories })
+
+        prefs.getString(KEY_HEAT, null)?.let { json ->
+            runCatching {
+                val type = object : TypeToken<Map<String, List<Int>>>() {}.type
+                gson.fromJson<Map<String, List<Int>>>(json, type)
+            }.getOrNull()?.forEach { (guid, counts) ->
+                heatMap[guid] = IntArray(HEAT_BUCKETS) { counts.getOrElse(it) { 0 } }
+            }
+        }
 
         prefs.getString(KEY_STATS, null)?.let { json ->
             runCatching { gson.fromJson(json, ListenStats::class.java) }.getOrNull()?.let { s ->
@@ -141,6 +158,39 @@ object LibraryStore {
     fun removeMoment(id: String) {
         moments.removeIf { it.id == id }
         persist(KEY_MOMENTS, moments)
+    }
+
+    // ---- Personal replay heatmap -------------------------------------------
+
+    /**
+     * Record that the user jumped *backward* to re-listen to the [fromFraction]→[toFraction]
+     * stretch of episode [guid] (both in 0..1). Every bucket the replayed region touches gets a
+     * little hotter, so the spots you keep rewinding to rise to the top over time.
+     */
+    fun recordReplay(guid: String, fromFraction: Float, toFraction: Float) {
+        if (guid.isBlank()) return
+        val lo = minOf(fromFraction, toFraction).coerceIn(0f, 1f)
+        val hi = maxOf(fromFraction, toFraction).coerceIn(0f, 1f)
+        val counts = heatMap.getOrPut(guid) { IntArray(HEAT_BUCKETS) }
+        val loBucket = (lo * (HEAT_BUCKETS - 1)).toInt().coerceIn(0, HEAT_BUCKETS - 1)
+        val hiBucket = (hi * (HEAT_BUCKETS - 1)).toInt().coerceIn(0, HEAT_BUCKETS - 1)
+        for (b in loBucket..hiBucket) {
+            counts[b] = (counts[b] + 1).coerceAtMost(HEAT_MAX_COUNT)
+        }
+        persistHeat()
+    }
+
+    /** Normalised (0..1) per-bucket heat for [guid]; all-zero list when nothing's been replayed. */
+    fun heatFor(guid: String): List<Float> {
+        val counts = heatMap[guid] ?: return List(HEAT_BUCKETS) { 0f }
+        val max = counts.maxOrNull()?.takeIf { it > 0 } ?: return List(HEAT_BUCKETS) { 0f }
+        return counts.map { it.toFloat() / max }
+    }
+
+    private fun persistHeat() {
+        if (!::prefs.isInitialized) return
+        val serializable = heatMap.mapValues { it.value.toList() }
+        prefs.edit().putString(KEY_HEAT, gson.toJson(serializable)).apply()
     }
 
     // ---- Downloads ---------------------------------------------------------

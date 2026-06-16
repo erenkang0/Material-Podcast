@@ -93,6 +93,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     /** Previously played episodes (most recent first). */
     val history = mutableStateListOf<PodcastEpisode>()
 
+    /**
+     * Personal replay heatmap for [nowPlaying]: one normalised (0..1) value per bucket across the
+     * episode, hotter where the user has rewound to re-listen. Drives the glow under the seek bar.
+     */
+    val heat = mutableStateListOf<Float>()
+
+    /** Fraction (0..1) of the single most-replayed spot, or null if nothing's been replayed yet. */
+    val hottestFraction: Float?
+        get() {
+            var maxIdx = -1
+            var maxV = 0f
+            heat.forEachIndexed { i, v -> if (v > maxV) { maxV = v; maxIdx = i } }
+            return if (maxIdx >= 0 && maxV > 0f) (maxIdx + 0.5f) / heat.size else null
+        }
+
     private var pendingPlay: (() -> Unit)? = null
     private var sleepJob: Job? = null
     private var lastSavedAt: Long = 0L
@@ -210,6 +225,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             isLiked = LibraryStore.isLiked(episode.guid)
             updateArtworkColor(episode)
             loadChapters(episode)
+            reloadHeat(episode.guid)
             pushHistory(episode)
             com.material.podcast.data.store.SettingsStore.setNowPlayingGuid(getApplication(), episode.guid)
         }
@@ -302,6 +318,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         currentQueueIndex = startIndex
         pushHistory(episode)
         updateArtworkColor(episode)
+        reloadHeat(episode.guid)
         LibraryStore.saveCurrentQueue(list)
         com.material.podcast.data.store.SettingsStore.setNowPlayingGuid(getApplication(), episode.guid)
 
@@ -375,23 +392,54 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private fun reloadHeat(guid: String) {
+        heat.clear()
+        heat.addAll(LibraryStore.heatFor(guid))
+    }
+
+    /** Note a backward jump as a "replay" so the heatmap learns the user's hot spots. */
+    private fun recordReplayIfBackward(oldMs: Long, newMs: Long) {
+        val ep = nowPlaying ?: return
+        val dur = durationMs.takeIf { it > 0 } ?: return
+        if (newMs < oldMs - 3_000L) {
+            LibraryStore.recordReplay(ep.guid, oldMs.toFloat() / dur, newMs.toFloat() / dur)
+            reloadHeat(ep.guid)
+        }
+    }
+
     fun seekTo(fraction: Float) {
         val ctrl = controller ?: return
         val dur = ctrl.duration.takeIf { it > 0 } ?: return
-        ctrl.seekTo((dur * fraction.coerceIn(0f, 1f)).toLong())
+        val oldPos = ctrl.currentPosition
+        val newPos = (dur * fraction.coerceIn(0f, 1f)).toLong()
+        recordReplayIfBackward(oldPos, newPos)
+        ctrl.seekTo(newPos)
         updatePosition()
     }
 
     fun seekToMs(ms: Long) {
         val ctrl = controller ?: return
-        ctrl.seekTo(ms.coerceAtLeast(0L))
+        val newPos = ms.coerceAtLeast(0L)
+        recordReplayIfBackward(ctrl.currentPosition, newPos)
+        ctrl.seekTo(newPos)
         updatePosition()
     }
 
     fun seekBy(deltaMs: Long) {
         val ctrl = controller ?: return
-        val newPos = (ctrl.currentPosition + deltaMs).coerceAtLeast(0L)
+        val oldPos = ctrl.currentPosition
+        val newPos = (oldPos + deltaMs).coerceAtLeast(0L)
+        recordReplayIfBackward(oldPos, newPos)
         ctrl.seekTo(newPos)
+        updatePosition()
+    }
+
+    /** Jump straight to the user's single most-replayed spot (no new replay is recorded). */
+    fun seekToHottest() {
+        val ctrl = controller ?: return
+        val dur = ctrl.duration.takeIf { it > 0 } ?: return
+        val frac = hottestFraction ?: return
+        ctrl.seekTo((dur * frac).toLong())
         updatePosition()
     }
 
