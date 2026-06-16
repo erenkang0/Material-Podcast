@@ -112,6 +112,8 @@ import com.material.podcast.EchoesApplication
 import com.material.podcast.data.store.LibraryStore
 import com.material.podcast.media.DownloadStatus
 import com.material.podcast.ui.LocalPlayer
+import com.material.podcast.ui.theme.AppThemeColor
+import com.material.podcast.ui.theme.LocalThemeController
 import com.material.podcast.ui.theme.PlayerColors
 import com.material.podcast.ui.theme.playerColorsFromSeed
 import kotlinx.coroutines.launch
@@ -1223,6 +1225,8 @@ private fun SeekSection(
         }
     }
 
+    val themeController = LocalThemeController.current
+    val isEldenRing = themeController.color == AppThemeColor.EldenRing
     WavySeekBar(
         fraction = fractionProvider,
         playing = player.isPlaying,
@@ -1235,6 +1239,7 @@ private fun SeekSection(
         modifier = Modifier.fillMaxWidth(),
         momentFractions = momentFractions,
         heat = player.heat,
+        heatColor = if (isEldenRing) androidx.compose.ui.graphics.Color(0xFFE05252) else androidx.compose.ui.graphics.Color(0xFFFF7043),
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         val posSec = if (dragging) (scrubValue * player.durationMs / 1000).toLong().toInt()

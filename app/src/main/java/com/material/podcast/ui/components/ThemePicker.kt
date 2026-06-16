@@ -3,14 +3,22 @@
 package com.material.podcast.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -120,7 +128,12 @@ fun ThemePickerSheet(
                     } else if (item == AppThemeColor.EldenRing) {
                         AnimatedVisibility(
                             visible = eldenRingUnlocked,
-                            enter = fadeIn() + scaleIn(initialScale = 0.7f),
+                            enter = fadeIn(tween(600)) +
+                                scaleIn(initialScale = 0.3f, animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessLow,
+                                )) +
+                                slideInVertically(tween(500)) { it / 2 },
                         ) {
                             EldenRingSwatch(
                                 selected = controller.color == item,
@@ -273,54 +286,108 @@ private fun ColorSwatch(
     }
 }
 
-// Special swatch for the Elden Ring easter egg — golden gradient, sparkle icon
+// Special swatch for the Elden Ring easter egg — rune-gold radial, pulsing crimson glow
 @Composable
 private fun EldenRingSwatch(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.12f else 1f,
+        targetValue = if (selected) 1.14f else 1f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
+            dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
         label = "eldenSwatch",
     )
-    val goldGradient = Brush.radialGradient(
-        colors = listOf(Color(0xFFEED17A), Color(0xFFC8A84B), Color(0xFF3A2C00)),
+    // Pulsing glow alpha — breathes slowly like the Erdtree
+    val pulse = rememberInfiniteTransition(label = "eldenPulse")
+    val glowAlpha by pulse.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "glowAlpha",
     )
+
+    // Deep void → blood-black core → gold ring → bright gold crown
+    val goldGradient = Brush.radialGradient(
+        0f   to Color(0xFFF5D87E),  // crown: pale gold
+        0.35f to Color(0xFFD4A843), // body: tarnished gold
+        0.65f to Color(0xFF6B3800), // shadow: deep amber-brown
+        1f   to Color(0xFF1A0800),  // edge: void dark
+    )
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(58.dp)
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .clip(CircleShape)
-                .background(brush = goldGradient)
-                .then(
-                    if (selected) {
-                        Modifier.border(3.dp, Color(0xFFEED17A), CircleShape)
-                    } else {
-                        Modifier.border(2.dp, Color(0xFFC8A84B), CircleShape)
-                    }
-                )
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(contentAlignment = Alignment.Center) {
+            // Outer crimson bloodflame ring — only visible and pulsing when selected
             if (selected) {
-                Icon(
-                    Icons.Rounded.Check,
-                    contentDescription = "Selected",
-                    tint = Color(0xFF1E1500),
-                    modifier = Modifier.size(26.dp),
+                Box(
+                    modifier = Modifier
+                        .size(70.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = glowAlpha
+                        }
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                0f to Color(0x00E05252),
+                                0.5f to Color(0x44E05252),
+                                1f to Color(0x00E05252),
+                            )
+                        ),
                 )
-            } else {
-                Icon(
-                    Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = Color(0xFF1E1500),
-                    modifier = Modifier.size(22.dp),
-                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                    .clip(CircleShape)
+                    .background(brush = goldGradient)
+                    .then(
+                        if (selected) {
+                            Modifier.border(
+                                width = 2.5.dp,
+                                brush = Brush.sweepGradient(
+                                    listOf(
+                                        Color(0xFFF5D87E),
+                                        Color(0xFFE05252),
+                                        Color(0xFFD4A843),
+                                        Color(0xFFF5D87E),
+                                    )
+                                ),
+                                shape = CircleShape,
+                            )
+                        } else {
+                            Modifier.border(
+                                width = 1.5.dp,
+                                color = Color(0xFFD4A843).copy(alpha = 0.7f),
+                                shape = CircleShape,
+                            )
+                        }
+                    )
+                    .clickable(onClick = onClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Icon(
+                        Icons.Rounded.Check,
+                        contentDescription = "Selected",
+                        tint = Color(0xFF1A0800),
+                        modifier = Modifier.size(26.dp),
+                    )
+                } else {
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color(0xFF1A0800).copy(alpha = 0.85f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -328,11 +395,7 @@ private fun EldenRingSwatch(
             "Elden Ring",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            color = if (selected) Color(0xFFD4A843) else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
