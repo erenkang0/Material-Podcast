@@ -906,52 +906,15 @@ private fun FullPlayerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // Speed control — quick-pick chips + fine-tune slider
+        // Speed control — just the current value above a fine-tune slider.
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "0.5×",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Hız: ${"%.2f".format(player.playbackSpeed)}×",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    "2×",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Speed quick-pick chips
-            val speedPresets = listOf(0.8f, 1.0f, 1.2f, 1.5f, 1.75f, 2.0f)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(speedPresets, key = { it }) { speed ->
-                    val label = when (speed) {
-                        1.0f -> "1×"
-                        else -> "${"%.2f".format(speed).trimEnd('0').trimEnd('.')}×"
-                    }
-                    val isSelected = kotlin.math.abs(player.playbackSpeed - speed) < 0.05f
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            player.setSpeed(speed)
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                        leadingIcon = if (isSelected) {
-                            { Icon(Icons.Rounded.Check, null, Modifier.size(14.dp)) }
-                        } else null,
-                    )
-                }
-            }
+            Text(
+                "Hız: ${"%.2f".format(player.playbackSpeed)}×",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
             Slider(
                 value = player.playbackSpeed,
                 onValueChange = { player.setSpeed(it) },
@@ -1113,17 +1076,17 @@ private fun FullPlayerContent(
                     )
                 }
             }
-            if (episode.transcriptUrl.isNotBlank()) {
-                IconButton(onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onOpenTranscript()
-                }) {
-                    Icon(
-                        Icons.Rounded.Subject,
-                        "Transkript",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            // Always available — the transcript screen shows a clear "not found" state with a
+            // close button when the episode has no transcript.
+            IconButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onOpenTranscript()
+            }) {
+                Icon(
+                    Icons.Rounded.Subject,
+                    "Transkript",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             IconButton(onClick = {
                 showAddToPlaylist = true

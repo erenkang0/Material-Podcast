@@ -1,5 +1,12 @@
 package com.material.podcast.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,13 +20,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.sin
 
 private const val SNAP_THRESHOLD = 0.018f  // 1.8% of total duration
 
@@ -38,15 +49,35 @@ fun WavySeekBar(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
-    // Styled to match the Material 3 Slider used in the speed control:
-    // uniform 4dp track, rounded caps, and a solid round thumb.
+    // Material 3 Expressive style: the played portion is an animated squiggle, the
+    // remaining portion a flat track, with a solid round handle.
     val activeStrokePx = with(density) { 4.dp.toPx() }
     val inactiveStrokePx = with(density) { 4.dp.toPx() }
-    val thumbR = with(density) { 10.dp.toPx() }
+    val thumbR = with(density) { 9.dp.toPx() }
     val dotR = with(density) { 3.dp.toPx() }
+    val waveLengthPx = with(density) { 16.dp.toPx() }
+    val targetAmplitudePx = with(density) { 3.dp.toPx() }
 
     var dragFrac by remember { mutableFloatStateOf(fraction) }
     var lastSnappedFrac by remember { mutableFloatStateOf(-1f) }
+
+    // Continuously scroll the wave phase while playing; freeze when paused.
+    val waveTransition = rememberInfiniteTransition(label = "wave")
+    val phase by waveTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1100, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "wavePhase",
+    )
+    // Flatten the squiggle when paused so it reads as a calm line.
+    val amplitude by animateFloatAsState(
+        targetValue = if (playing) targetAmplitudePx else 0f,
+        animationSpec = tween(450),
+        label = "waveAmp",
+    )
 
     Canvas(
         modifier = modifier
@@ -104,15 +135,36 @@ fun WavySeekBar(
         // Small gap on either side of the thumb, matching the M3 Slider look.
         val gap = thumbR * 0.6f
 
-        // Active (played) portion
-        if (thumbX - gap > startX) {
-            drawLine(
-                color = activeColor,
-                start = Offset(startX, centerY),
-                end = Offset(thumbX - gap, centerY),
-                strokeWidth = activeStrokePx,
-                cap = StrokeCap.Round,
-            )
+        // Active (played) portion — an animated squiggle (M3 Expressive).
+        val activeEnd = thumbX - gap
+        if (activeEnd > startX) {
+            if (amplitude < 0.5f) {
+                // Effectively flat (paused) — draw a clean line.
+                drawLine(
+                    color = activeColor,
+                    start = Offset(startX, centerY),
+                    end = Offset(activeEnd, centerY),
+                    strokeWidth = activeStrokePx,
+                    cap = StrokeCap.Round,
+                )
+            } else {
+                val path = Path().apply {
+                    moveTo(startX, centerY)
+                    var x = startX
+                    val step = 2f
+                    while (x <= activeEnd) {
+                        val t = (x - startX) / waveLengthPx * (2f * PI).toFloat() + phase
+                        lineTo(x, centerY + amplitude * sin(t))
+                        x += step
+                    }
+                    lineTo(activeEnd, centerY + amplitude * sin((activeEnd - startX) / waveLengthPx * (2f * PI).toFloat() + phase))
+                }
+                drawPath(
+                    path = path,
+                    color = activeColor,
+                    style = Stroke(width = activeStrokePx, cap = StrokeCap.Round),
+                )
+            }
         }
         // Inactive (remaining) portion
         if (endX > thumbX + gap) {
