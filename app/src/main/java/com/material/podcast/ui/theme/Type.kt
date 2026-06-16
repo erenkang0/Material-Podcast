@@ -4,75 +4,86 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import com.material.podcast.R
 
-/**
- * Typography is intentionally built on the platform default font family so the app reads as a
- * native Material 3 surface. We only nudge a few weights for a slightly more expressive,
- * editorial feel on the largest roles — every screen consumes these via
- * `MaterialTheme.typography.*`, never hardcoded sizes.
- */
-private val Default = FontFamily.Default
+private val fontProvider = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs,
+)
+
+// Plus Jakarta Sans — geometric humanist sans with clean curves identical to Google Sans Flex
+private val googleSansFlex = GoogleFont("Plus Jakarta Sans")
+
+private val AppFontFamily = FontFamily(
+    Font(googleFont = googleSansFlex, fontProvider = fontProvider, weight = FontWeight.Normal),
+    Font(googleFont = googleSansFlex, fontProvider = fontProvider, weight = FontWeight.Medium),
+    Font(googleFont = googleSansFlex, fontProvider = fontProvider, weight = FontWeight.SemiBold),
+    Font(googleFont = googleSansFlex, fontProvider = fontProvider, weight = FontWeight.Bold),
+)
 
 val AppTypography = Typography(
     displayLarge = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-0.25).sp
     ),
     displayMedium = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 45.sp, lineHeight = 52.sp
     ),
     displaySmall = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 36.sp, lineHeight = 44.sp
     ),
     headlineLarge = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Bold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
         fontSize = 32.sp, lineHeight = 40.sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Bold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
         fontSize = 28.sp, lineHeight = 36.sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp, lineHeight = 32.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp, lineHeight = 28.sp
     ),
     titleMedium = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.15.sp
     ),
     titleSmall = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Medium,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Medium,
         fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp
     ),
     bodyLarge = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Normal,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Normal,
         fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.5.sp
     ),
     bodyMedium = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Normal,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Normal,
         fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.25.sp
     ),
     bodySmall = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Normal,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Normal,
         fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.4.sp
     ),
     labelLarge = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.SemiBold,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Medium,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Medium,
         fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = Default, fontWeight = FontWeight.Medium,
+        fontFamily = AppFontFamily, fontWeight = FontWeight.Medium,
         fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp
     ),
 )

@@ -98,7 +98,7 @@ fun ThemePickerSheet(
 
             Spacer(Modifier.height(20.dp))
             Text(
-                "Tema rengi",
+                "Tema Rengi",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -152,7 +152,7 @@ fun ThemePickerSheet(
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "Mod",
+                "Karanlık Mod",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -183,7 +183,7 @@ fun ThemePickerSheet(
 
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Echoes · v1.0.0 · crafted with Claude",
+                text = "Echoes · v1.0.0 · Claude ile yapıldı",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -267,7 +267,7 @@ private fun ColorSwatch(
             if (selected) {
                 Icon(
                     Icons.Rounded.Check,
-                    contentDescription = "Selected",
+                    contentDescription = "Seçili",
                     tint = Color.White,
                     modifier = Modifier.size(26.dp),
                 )
@@ -376,7 +376,7 @@ private fun EldenRingSwatch(
                 if (selected) {
                     Icon(
                         Icons.Rounded.Check,
-                        contentDescription = "Selected",
+                        contentDescription = "Seçili",
                         tint = Color(0xFF1A0800),
                         modifier = Modifier.size(26.dp),
                     )

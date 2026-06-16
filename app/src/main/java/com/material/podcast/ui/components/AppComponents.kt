@@ -908,7 +908,7 @@ fun MiniPlayer(
                         modifier = Modifier.padding(horizontal = 6.dp).height(18.dp).width(20.dp),
                     )
                     FilledIconButton(onClick = { player.togglePlayPause() }) {
-                        PlayPauseIcon(player.isPlaying, if (player.isPlaying) "Pause" else "Play")
+                        PlayPauseIcon(player.isPlaying, if (player.isPlaying) "Duraklat" else "Oynat")
                     }
                 }
             }

@@ -2,26 +2,26 @@
 <resources>
     <string name="app_name">Echoes</string>
 
-    <!-- Navigation -->
-    <string name="nav_home">Home</string>
-    <string name="nav_search">Explore</string>
-    <string name="nav_library">Library</string>
-    <string name="nav_settings">Settings</string>
+    <!-- Navigasyon -->
+    <string name="nav_home">Ana Sayfa</string>
+    <string name="nav_search">Keşfet</string>
+    <string name="nav_library">Kütüphane</string>
+    <string name="nav_settings">Ayarlar</string>
 
-    <!-- Settings screen -->
-    <string name="settings_title">Settings</string>
-    <string name="settings_appearance">Appearance</string>
-    <string name="settings_color_theme">Color Theme</string>
-    <string name="settings_color_theme_sub">Choose your palette</string>
-    <string name="settings_language">Language</string>
-    <string name="settings_playback">Playback</string>
-    <string name="settings_default_speed">Default Playback Speed</string>
-    <string name="settings_about">About</string>
-    <string name="settings_version">Version</string>
-    <string name="settings_open_source">Open Source</string>
-    <string name="settings_open_source_sub">Built with Kotlin · Jetpack Compose · Material 3</string>
+    <!-- Ayarlar ekranı -->
+    <string name="settings_title">Ayarlar</string>
+    <string name="settings_appearance">Görünüm</string>
+    <string name="settings_color_theme">Renk teması</string>
+    <string name="settings_color_theme_sub">Paletini seç</string>
+    <string name="settings_language">Dil</string>
+    <string name="settings_playback">Oynatma</string>
+    <string name="settings_default_speed">Varsayılan oynatma hızı</string>
+    <string name="settings_about">Hakkında</string>
+    <string name="settings_version">Sürüm</string>
+    <string name="settings_open_source">Açık kaynak</string>
+    <string name="settings_open_source_sub">Kotlin · Jetpack Compose · Material 3 ile yapıldı</string>
 
-    <!-- Language options -->
-    <string name="lang_english">English</string>
+    <!-- Dil seçenekleri -->
+    <string name="lang_english">İngilizce</string>
     <string name="lang_turkish">Türkçe</string>
 </resources>

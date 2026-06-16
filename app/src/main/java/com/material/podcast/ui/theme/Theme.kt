@@ -231,7 +231,7 @@ enum class AppThemeColor(
 
 /** How the app resolves light vs dark. */
 enum class DarkModeOption(val label: String) {
-    System("Auto"), Light("Light"), Dark("Dark"),
+    System("Otomatik"), Light("Açık"), Dark("Koyu"),
 }
 
 /* ------------------------------------------------------------------------------------------------
