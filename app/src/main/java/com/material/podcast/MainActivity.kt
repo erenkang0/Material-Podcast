@@ -173,7 +173,6 @@ private fun PodcastApp(themeController: ThemeController) {
 
     MaterialTheme(colorScheme = dynamicScheme) {
 
-    val context = LocalContext.current
     val navController = rememberNavController()
     val backEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backEntry?.destination?.route
@@ -187,6 +186,8 @@ private fun PodcastApp(themeController: ThemeController) {
     )
     val bottomBarRoutes = navItems.map { it.route }.toSet()
     val showBottomBar = currentRoute in bottomBarRoutes
+    // Show the mini player on the main tabs AND on the show-details (episodes) screen.
+    val showMiniPlayer = showBottomBar || currentRoute == Screen.ShowDetails.route
 
     val selectTab: (String) -> Unit = { route ->
         navController.navigate(route) {
@@ -200,7 +201,7 @@ private fun PodcastApp(themeController: ThemeController) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             AnimatedVisibility(
-                visible = showBottomBar,
+                visible = showMiniPlayer,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
             ) {
@@ -215,35 +216,11 @@ private fun PodcastApp(themeController: ThemeController) {
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
                     }
-                    // Centre "tap to share over NFC" button for the now-playing podcast.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        contentAlignment = Alignment.Center,
+                    AnimatedVisibility(
+                        visible = showBottomBar,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit = slideOutVertically { it } + fadeOut(),
                     ) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                val np = player.nowPlaying
-                                if (np == null) {
-                                    Toast.makeText(context, "Önce bir bölüm çal", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    NfcShareController.startShare(
-                                        NfcShareController.SharePayload(
-                                            id = np.podcastId.ifBlank { np.guid },
-                                            title = np.podcastTitle.ifBlank { np.title },
-                                            author = "",
-                                            artworkUrl = np.artworkUrl,
-                                            feedUrl = "",
-                                        )
-                                    )
-                                }
-                            },
-                            modifier = Modifier.size(42.dp),
-                        ) {
-                            Icon(Icons.Rounded.Contactless, contentDescription = "NFC ile paylaş")
-                        }
-                    }
                     NavigationBar {
                         navItems.forEach { item ->
                             val selected = backEntry?.destination?.hierarchy
@@ -265,6 +242,7 @@ private fun PodcastApp(themeController: ThemeController) {
                                 label = { Text(item.label) },
                             )
                         }
+                    }
                     }
                 }
             }

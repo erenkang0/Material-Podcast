@@ -67,8 +67,11 @@ jobs:
           # Refresh the v1.0.0 release so the same releases page always shows the latest build
           gh release delete v1.0.0 --yes 2>/dev/null || true
 
+          # Release notes = only the latest version's section (first "## " block) of the changelog
+          NOTES="$(awk '/^## /{c++} c==1{print} c==2{exit}' CHANGELOG.md)"
+
           gh release create v1.0.0 \
             --target "${{ github.sha }}" \
             --title "Echoes v1.0.0" \
-            --notes "$(cat CHANGELOG.md)" \
+            --notes "$NOTES" \
             "release/Echoes-v1.0.0.apk#Echoes v1.0.0 (debug APK)"

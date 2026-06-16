@@ -80,6 +80,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -818,6 +819,29 @@ private fun RecentEpisodesTab() {
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
         ) {
+            item(key = "history_header") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${history.size} bölüm",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { player.clearHistory() }) {
+                        Icon(
+                            Icons.Rounded.DeleteOutline, null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Geçmişi sil")
+                    }
+                }
+            }
             items(history, key = { it.guid }) { episode ->
                 EpisodeListItem(
                     episode = episode,

@@ -398,7 +398,7 @@ private fun SuccessContent(
         item(key = "actions") {
             ActionRow(
                 podcast = podcast,
-                latestEpisode = episodes.firstOrNull(),
+                episodes = episodes,
                 following = following,
                 onPlay = {
                     val first = episodes.firstOrNull() ?: return@ActionRow
@@ -550,7 +550,6 @@ private fun StatsBar(
         StatCell(
             label = "Son bölüm",
             value = if (latestDate.isNotBlank()) latestDate.take(10) else "—",
-            emoji = "📅",
             modifier = Modifier.weight(1f),
         )
 
@@ -565,40 +564,8 @@ private fun StatsBar(
         StatCell(
             label = "Bölüm sayısı",
             value = "$episodeCount bölüm",
-            emoji = "🎙️",
             modifier = Modifier.weight(1f),
         )
-
-        Box(
-            Modifier
-                .width(1.dp)
-                .height(32.dp)
-                .background(dividerColor)
-        )
-
-        // Rating placeholder
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .padding(vertical = 6.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    "⭐ 4.8",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    "Puan",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                )
-            }
-        }
     }
 }
 
@@ -606,14 +573,12 @@ private fun StatsBar(
 private fun StatCell(
     label: String,
     value: String,
-    emoji: String,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(emoji, style = MaterialTheme.typography.bodyMedium)
         Text(
             value,
             style = MaterialTheme.typography.labelMedium,
@@ -824,7 +789,7 @@ private fun PodcastHeader(
 @Composable
 private fun ActionRow(
     podcast: Podcast,
-    latestEpisode: PodcastEpisode?,
+    episodes: List<PodcastEpisode>,
     following: Boolean,
     onPlay: () -> Unit,
     onFollowToggle: () -> Unit,
@@ -953,8 +918,8 @@ private fun ActionRow(
                         }
                     }
 
-                    if (latestEpisode != null) {
-                        ShowDownloadButton(episode = latestEpisode)
+                    if (episodes.isNotEmpty()) {
+                        DownloadAllButton(episodes = episodes)
                     }
                 }
             }
@@ -963,33 +928,50 @@ private fun ActionRow(
 }
 
 @Composable
-private fun ShowDownloadButton(episode: PodcastEpisode) {
+private fun DownloadAllButton(episodes: List<PodcastEpisode>) {
     val dm = com.material.podcast.EchoesApplication.instance.downloadManager
     val haptics = LocalHapticFeedback.current
-    val downloaded = LibraryStore.isDownloaded(episode.guid)
-    val state = dm.states[episode.guid]
-    OutlinedIconButton(onClick = {
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        when {
-            downloaded -> dm.delete(episode.guid)
-            state?.status == com.material.podcast.media.DownloadStatus.Downloading ||
-            state?.status == com.material.podcast.media.DownloadStatus.Queued -> {}
-            else -> dm.download(episode)
-        }
-    }) {
-        when {
-            downloaded -> Icon(
-                Icons.Rounded.DownloadDone, "İndirildi",
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            state?.status == com.material.podcast.media.DownloadStatus.Downloading ||
-            state?.status == com.material.podcast.media.DownloadStatus.Queued ->
-                CircularProgressIndicator(
-                    progress = { state.progress.coerceIn(0f, 1f) },
+
+    fun isActive(guid: String): Boolean {
+        val s = dm.states[guid]
+        return s?.status == com.material.podcast.media.DownloadStatus.Downloading ||
+            s?.status == com.material.podcast.media.DownloadStatus.Queued
+    }
+
+    val downloadedCount = episodes.count { LibraryStore.isDownloaded(it.guid) }
+    val activeCount = episodes.count { isActive(it.guid) }
+    val allDownloaded = episodes.isNotEmpty() && downloadedCount == episodes.size
+
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = {
+            PlainTooltip {
+                Text(if (allDownloaded) "Tüm bölümler indirildi" else "Tüm bölümleri indir")
+            }
+        },
+        state = rememberTooltipState(),
+    ) {
+        OutlinedIconButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            // Queue every not-yet-downloaded, not-already-active episode; the download
+            // manager throttles to a few concurrent downloads and queues the rest.
+            episodes.forEach { ep ->
+                if (!LibraryStore.isDownloaded(ep.guid) && !isActive(ep.guid)) {
+                    dm.download(ep)
+                }
+            }
+        }) {
+            when {
+                allDownloaded -> Icon(
+                    Icons.Rounded.DownloadDone, "Tüm bölümler indirildi",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                activeCount > 0 -> CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                 )
-            else -> Icon(Icons.Rounded.Download, "Son bölümü indir")
+                else -> Icon(Icons.Rounded.Download, "Tüm bölümleri indir")
+            }
         }
     }
 }

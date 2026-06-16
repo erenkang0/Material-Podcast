@@ -35,6 +35,7 @@ object LibraryStore {
     private const val KEY_CURRENT_QUEUE = "current_queue"
     private const val KEY_STATS = "listen_stats"
     private const val KEY_PLAYLISTS = "playlists"
+    private const val KEY_HISTORY = "play_history"
 
     const val MAX_CATEGORIES = 10
     private const val MAX_RESUME = 40
@@ -206,6 +207,15 @@ object LibraryStore {
 
     fun getCurrentQueue(): List<PodcastEpisode> =
         load(KEY_CURRENT_QUEUE, object : TypeToken<List<PodcastEpisode>>() {})
+
+    // ---- Recently played history (persisted until the user clears it) -------
+
+    fun getPlayHistory(): List<PodcastEpisode> =
+        load(KEY_HISTORY, object : TypeToken<List<PodcastEpisode>>() {})
+
+    fun savePlayHistory(history: List<PodcastEpisode>) = persist(KEY_HISTORY, history)
+
+    fun clearPlayHistory() = persist(KEY_HISTORY, emptyList<PodcastEpisode>())
 
     // ---- New-episode tracking (for push notifications) ---------------------
 

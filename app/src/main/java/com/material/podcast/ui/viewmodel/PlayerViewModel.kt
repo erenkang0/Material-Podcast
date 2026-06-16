@@ -132,6 +132,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             nowPlaying?.let { isLiked = LibraryStore.isLiked(it.guid) }
         }
 
+        // Restore the persisted "recently played" history so it survives app restarts.
+        history.addAll(LibraryStore.getPlayHistory())
+
         controllerFuture.addListener({
             try {
                 controller = controllerFuture.get().also { ctrl ->
@@ -263,6 +266,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         history.removeIf { it.guid == episode.guid }
         history.add(0, episode)
         if (history.size > 50) history.removeAt(history.lastIndex)
+        LibraryStore.savePlayHistory(history)
+    }
+
+    /** Clear the persisted "recently played" history (user-triggered). */
+    fun clearHistory() {
+        history.clear()
+        LibraryStore.clearPlayHistory()
     }
 
     private fun updateArtworkColor(episode: PodcastEpisode) {

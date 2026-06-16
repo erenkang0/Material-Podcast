@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Contactless
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.FormatListBulleted
@@ -826,6 +827,25 @@ private fun FullPlayerContent(
                     "Beğen",
                     tint = if (player.isLiked) MaterialTheme.colorScheme.primary
                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // NFC ile bu podcast'i paylaş
+            IconButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                com.material.podcast.nfc.NfcShareController.startShare(
+                    com.material.podcast.nfc.NfcShareController.SharePayload(
+                        id = episode.podcastId.ifBlank { episode.guid },
+                        title = episode.podcastTitle.ifBlank { episode.title },
+                        author = episode.podcastAuthor,
+                        artworkUrl = episode.artworkUrl,
+                        feedUrl = "",
+                    ),
+                )
+            }) {
+                Icon(
+                    Icons.Rounded.Contactless,
+                    "NFC ile paylaş",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
