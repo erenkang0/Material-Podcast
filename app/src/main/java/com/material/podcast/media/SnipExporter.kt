@@ -44,9 +44,15 @@ object SnipExporter {
             .build()
 
         val dir = File(context.cacheDir, "snips").apply { mkdirs() }
-        val output = File(dir, "snip_${System.currentTimeMillis()}.mp4")
+        // Note: Media3 Transformer cannot mux true MP3; we output an AAC stream in an MP4
+        // container with an `.m4a` extension (MIME audio/mp4), which is the broadly
+        // compatible audio format recognized by WhatsApp and other messaging apps.
+        val output = File(dir, "snip_${System.currentTimeMillis()}.m4a")
 
         val transformer = Transformer.Builder(context)
+            // Drop any video track so the result is an audio-only clip; podcasts are
+            // already audio-only but this guarantees a pure audio file for sharing.
+            .setRemoveVideo(true)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, result: ExportResult) {
                     onResult(output)
@@ -73,7 +79,8 @@ object SnipExporter {
     fun share(context: Context, file: File, episode: PodcastEpisode) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/*"
+            // m4a's MIME — more reliably recognized as shareable audio than "audio/*".
+            type = "audio/mp4"
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_TEXT, "${episode.title} — ${episode.podcastTitle} · Echoes")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
@@ -200,7 +201,33 @@ fun NowPlayingBar(
                     .padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    // Make the artwork participate in the same tap + swipe-up-to-expand
+                    // gesture as the rest of the bar, instead of swallowing the touch.
+                    modifier = Modifier
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        ) { onExpand() }
+                        .pointerInput(Unit) {
+                            var accY = 0f
+                            var accX = 0f
+                            detectDragGestures(
+                                onDragStart = { accY = 0f; accX = 0f },
+                                onDrag = { change, drag ->
+                                    change.consume()
+                                    accY += drag.y
+                                    accX += drag.x
+                                },
+                                onDragEnd = {
+                                    if (accY < -verticalThresholdPx && abs(accY) > abs(accX)) onExpand()
+                                    accY = 0f; accX = 0f
+                                },
+                                onDragCancel = { accY = 0f; accX = 0f },
+                            )
+                        },
+                ) {
                     // Pulsing glow behind artwork when playing
                     val infiniteGlow = rememberInfiniteTransition(label = "glowPulse")
                     val glowAlpha by infiniteGlow.animateFloat(
@@ -550,13 +577,11 @@ private fun FullPlayerContent(
         )
     }
 
-    val startSnip: (Int) -> Unit = { seconds ->
-        val end = player.positionMs
-        val start = (end - seconds * 1000L).coerceAtLeast(0L)
+    val startSnip: (Long, Long) -> Unit = { startMs, endMs ->
         showSnip = false
         snipExporting = true
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        com.material.podcast.media.SnipExporter.export(context, episode, start, end) { file ->
+        com.material.podcast.media.SnipExporter.export(context, episode, startMs, endMs) { file ->
             snipExporting = false
             if (file != null) {
                 com.material.podcast.media.SnipExporter.share(context, file, episode)
@@ -566,40 +591,83 @@ private fun FullPlayerContent(
         }
     }
 
-    var snipSeconds by remember { mutableIntStateOf(30) }
     if (showSnip) {
+        val durationSec = (player.durationMs / 1000f).coerceAtLeast(1f)
+        val curSec = (player.positionMs / 1000f).coerceIn(0f, durationSec)
+        // Default selection: ~30s ending at the current position.
+        var snipRange by remember {
+            mutableStateOf((curSec - 30f).coerceAtLeast(0f)..curSec)
+        }
+        val startSel = snipRange.start
+        val endSel = snipRange.endInclusive
+        val lengthSel = (endSel - startSel).toInt()
+
         AlertDialog(
             onDismissRequest = { showSnip = false },
             title = { Text("Snip oluştur") },
             text = {
                 Column {
                     Text(
-                        "Şu anki konumdan önceki son ${snipSeconds}s paylaşılacak.",
+                        "Paylaşılacak bölümü seç, dilersen önce dinle.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(16.dp))
-                    Text(
-                        "${snipSeconds}s",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                    )
-                    Slider(
-                        value = snipSeconds.toFloat(),
-                        onValueChange = { snipSeconds = it.toInt().coerceIn(5, 60) },
-                        valueRange = 5f..60f,
-                        steps = 10,
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            formatTimeSec(startSel.toInt()),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            "$lengthSel sn",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            formatTimeSec(endSel.toInt()),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    androidx.compose.material3.RangeSlider(
+                        value = snipRange,
+                        onValueChange = { range ->
+                            var s = range.start
+                            var e = range.endInclusive
+                            // Constrain selected length to 5..90 seconds.
+                            val len = e - s
+                            if (len < 5f) {
+                                if (s == snipRange.start) e = (s + 5f).coerceAtMost(durationSec)
+                                else s = (e - 5f).coerceAtLeast(0f)
+                            } else if (len > 90f) {
+                                if (s == snipRange.start) e = s + 90f
+                                else s = e - 90f
+                            }
+                            snipRange = s..e
+                        },
+                        valueRange = 0f..durationSec,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("5s", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("60s", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            player.seekToMs((startSel * 1000L).toLong())
+                            if (!player.isPlaying) player.togglePlayPause()
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Önizle")
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { startSnip(snipSeconds) }) { Text("Oluştur") }
+                TextButton(onClick = {
+                    startSnip((startSel * 1000L).toLong(), (endSel * 1000L).toLong())
+                }) { Text("Oluştur") }
             },
             dismissButton = { TextButton(onClick = { showSnip = false }) { Text("İptal") } },
         )
@@ -865,7 +933,10 @@ private fun FullPlayerContent(
         Spacer(Modifier.height(8.dp))
 
         // Smart audio — skip silences + voice boost (handled in the playback service)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        ) {
             FilterChip(
                 selected = player.skipSilence,
                 onClick = {

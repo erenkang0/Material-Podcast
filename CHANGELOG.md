@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.0.0 — 2026-06-16
+
+### 🎧 Tam Ekran Transkript (Apple Music tarzı)
+- Transkript artık tam ekran ve kapak renklerinden türeyen arka planla; çalan satır büyük ve ortada, akıcı karaoke akışı. Satıra dokununca atlama, arama, transkript yoksa **Kapat** butonu.
+
+### 🎨 Dinamik Renkli Podcast Sayfası
+- Bölümler sayfasının **tüm rengi** kapak görselinden türetilir (üst bar, yüzeyler, vurgular akıcı geçişle).
+
+### 📡 NFC ile Podcast Paylaşma
+- Telefon arkasını yaklaştırarak podcast paylaşımı (HCE / NFC Forum Type-4 NDEF). Gönderen için radar bekleme animasyonu + paylaş menüsü yedeği; alan tarafta **"Podcast açılıyor…"** geçişi. Arama sekmesi yanında ortada NFC gönder butonu, üç nokta menüsünde **"NFC ile bu podcast'i paylaş"**.
+
+### ✂️ Gelişmiş Snip
+- Kesmeden önce **aralık seçici** ile tam istenen kısım seçilir, **Önizle** ile dinlenir; çıktı WhatsApp uyumlu **.m4a (audio/mp4)** ses dosyası.
+
+### 🔍 Yenilenen Arama
+- "Keşfet" başlığı, renkli kategori kartları, zengin sonuç satırları, shimmer yükleme ve dostça boş durumlar.
+
+### 🎚️ Oynatıcı İyileştirmeleri
+- "Sessizlikleri atla" ve "Ses yükselt" butonları ortalandı; mini oynatıcıda **fotoğraf üstünden de** yukarı kaydırma çalışır.
+
+### 📚 Transkript & Bölüm İşaretleri
+- Transkript otomatik kaydırma/eşitleme, arama; bölüm işaretlerinde geçerli bölüm vurgusu, bölüm içi ilerleme çubuğu, daha sağlam ayrıştırma.
+
 ## v1.0-beta — 2026-06-15
 
 ### 🎨 Material You Dinamik Renk

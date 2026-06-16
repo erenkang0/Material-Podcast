@@ -48,7 +48,7 @@ jobs:
       - name: Stage artifact
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/debug/app-debug.apk release/Echoes-v0.1-beta.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release/Echoes-v1.0.0.apk
           ls -lh release/
 
       # ── 7. Tag ──────────────────────────────────────────────────────────
@@ -56,19 +56,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f v0.1-beta
-          git push origin v0.1-beta --force
+          git tag -f v1.0.0
+          git push origin v1.0.0 --force
 
       # ── 8. Release ──────────────────────────────────────────────────────
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Delete previous release if it exists
-          gh release delete v0.1-beta --yes 2>/dev/null || true
+          # Refresh the v1.0.0 release so the same releases page always shows the latest build
+          gh release delete v1.0.0 --yes 2>/dev/null || true
 
-          gh release create v0.1-beta \
+          gh release create v1.0.0 \
             --target "${{ github.sha }}" \
-            --title "Echoes v0.1-beta" \
+            --title "Echoes v1.0.0" \
             --notes "$(cat CHANGELOG.md)" \
-            "release/Echoes-v0.1-beta.apk#Echoes v0.1-beta (debug APK)"
+            "release/Echoes-v1.0.0.apk#Echoes v1.0.0 (debug APK)"
