@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Nfc
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
@@ -94,6 +95,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -150,6 +152,36 @@ fun ShowDetailsScreen(
         }
     }
 
+    // Whole-page dynamic color derived from the podcast cover art seed.
+    val baseScheme = MaterialTheme.colorScheme
+    val isDark = baseScheme.surface.luminance() < 0.5f
+    val seed = artworkColorSeed
+    val seedColor = if (seed != 0) Color(seed) else baseScheme.primary
+
+    val targetPrimary = if (seed != 0) lerp(baseScheme.primary, seedColor, if (isDark) 0.30f else 0.22f) else baseScheme.primary
+    val targetPrimaryContainer = if (seed != 0) lerp(baseScheme.primaryContainer, seedColor, if (isDark) 0.32f else 0.26f) else baseScheme.primaryContainer
+    val targetSecondaryContainer = if (seed != 0) lerp(baseScheme.secondaryContainer, seedColor, if (isDark) 0.22f else 0.18f) else baseScheme.secondaryContainer
+    val targetSurface = if (seed != 0) lerp(baseScheme.surface, seedColor, if (isDark) 0.08f else 0.05f) else baseScheme.surface
+    val targetBackground = if (seed != 0) lerp(baseScheme.background, seedColor, if (isDark) 0.08f else 0.05f) else baseScheme.background
+    val targetSurfaceVariant = if (seed != 0) lerp(baseScheme.surfaceVariant, seedColor, if (isDark) 0.10f else 0.07f) else baseScheme.surfaceVariant
+
+    val dynPrimary by animateColorAsState(targetPrimary, tween(700), label = "dynPrimary")
+    val dynPrimaryContainer by animateColorAsState(targetPrimaryContainer, tween(700), label = "dynPrimaryContainer")
+    val dynSecondaryContainer by animateColorAsState(targetSecondaryContainer, tween(700), label = "dynSecondaryContainer")
+    val dynSurface by animateColorAsState(targetSurface, tween(700), label = "dynSurface")
+    val dynBackground by animateColorAsState(targetBackground, tween(700), label = "dynBackground")
+    val dynSurfaceVariant by animateColorAsState(targetSurfaceVariant, tween(700), label = "dynSurfaceVariant")
+
+    val dynamicScheme = if (seed != 0) baseScheme.copy(
+        primary = dynPrimary,
+        primaryContainer = dynPrimaryContainer,
+        secondaryContainer = dynSecondaryContainer,
+        surface = dynSurface,
+        background = dynBackground,
+        surfaceVariant = dynSurfaceVariant,
+    ) else baseScheme
+
+    MaterialTheme(colorScheme = dynamicScheme) {
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -192,6 +224,22 @@ fun ShowDetailsScreen(
                                     onClick = { menuOpen = false; sharePodcast(context, podcast) },
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("NFC ile bu podcast'i paylaş") },
+                                    leadingIcon = { Icon(Icons.Rounded.Nfc, null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        com.material.podcast.nfc.NfcShareController.startShare(
+                                            com.material.podcast.nfc.NfcShareController.SharePayload(
+                                                id = podcast.id,
+                                                title = podcast.title,
+                                                author = podcast.author,
+                                                artworkUrl = podcast.artworkUrl,
+                                                feedUrl = podcast.feedUrl,
+                                            )
+                                        )
+                                    },
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Bağlantıyı kopyala") },
                                     leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
                                     onClick = { menuOpen = false; copyLink(context, podcast) },
@@ -226,6 +274,7 @@ fun ShowDetailsScreen(
                 onOpenAuthor = onOpenAuthor,
             )
         }
+    }
     }
 }
 

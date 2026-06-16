@@ -1,8 +1,10 @@
 package com.material.podcast
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -35,20 +37,32 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Contactless
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import com.material.podcast.nfc.NfcShareController
+import com.material.podcast.ui.components.NfcShareSheet
 import androidx.compose.ui.res.stringResource
 import com.material.podcast.R
 import androidx.compose.ui.Modifier
@@ -93,6 +107,7 @@ class MainActivity : ComponentActivity() {
         )
         enableEdgeToEdge()
         window.attributes.preferredRefreshRate = 120f
+        handleShareIntent(intent)
         setContent {
             val themeController = rememberThemeController()
             val playerVm: PlayerViewModel = viewModel()
@@ -112,11 +127,29 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                    if (NfcShareController.activeShare != null) {
+                        NfcShareSheet(onDismiss = { NfcShareController.stopShare() })
+                    }
                     if (showOpening) {
                         OpeningScreen(onDone = { showOpening = false })
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // singleTask delivers re-launch intents here (e.g. a received NFC/deep-link share).
+        setIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    /** Route an incoming `echoes://share?…` deep link (NFC NDEF dispatch or browser) to the controller. */
+    private fun handleShareIntent(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme == "echoes" && data.host == "share") {
+            NfcShareController.onReceived(data.toString())
         }
     }
 }
@@ -140,6 +173,7 @@ private fun PodcastApp(themeController: ThemeController) {
 
     MaterialTheme(colorScheme = dynamicScheme) {
 
+    val context = LocalContext.current
     val navController = rememberNavController()
     val backEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backEntry?.destination?.route
@@ -180,6 +214,35 @@ private fun PodcastApp(themeController: ThemeController) {
                             onExpand = { player.expandSheet = true },
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
+                    }
+                    // Centre "tap to share over NFC" button for the now-playing podcast.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                val np = player.nowPlaying
+                                if (np == null) {
+                                    Toast.makeText(context, "Önce bir bölüm çal", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    NfcShareController.startShare(
+                                        NfcShareController.SharePayload(
+                                            id = np.podcastId.ifBlank { np.guid },
+                                            title = np.podcastTitle.ifBlank { np.title },
+                                            author = "",
+                                            artworkUrl = np.artworkUrl,
+                                            feedUrl = "",
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.size(42.dp),
+                        ) {
+                            Icon(Icons.Rounded.Contactless, contentDescription = "NFC ile paylaş")
+                        }
                     }
                     NavigationBar {
                         navItems.forEach { item ->
@@ -248,6 +311,34 @@ private fun PodcastApp(themeController: ThemeController) {
                 navController.navigate(Screen.Chapters.route)
             },
         )
+    }
+
+    // A share was received: show a brief "açılıyor" overlay, then navigate to the show.
+    val pendingOpenId = NfcShareController.pendingOpenId
+    if (pendingOpenId != null) {
+        LaunchedEffect(pendingOpenId) {
+            delay(600)
+            navController.navigate(Screen.ShowDetails.create(pendingOpenId))
+            NfcShareController.pendingOpenId = null
+        }
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+                androidx.compose.foundation.layout.Spacer(Modifier.padding(8.dp))
+                Text(
+                    text = "Podcast açılıyor…",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
     }
 
     } // end MaterialTheme(colorScheme = dynamicScheme)
