@@ -138,11 +138,38 @@ fun NowPlayingBar(
         label = "barScale",
     )
 
+    // Dynamic color from the artwork, blended toward the M3 primaryContainer so it stays tasteful.
+    val baseScheme = MaterialTheme.colorScheme
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
+    val seed = player.artworkColorSeed
+    val targetContainer: androidx.compose.ui.graphics.Color
+    val targetOnContainer: androidx.compose.ui.graphics.Color
+    val targetAccent: androidx.compose.ui.graphics.Color
+    if (seed != 0) {
+        val pc = playerColorsFromSeed(seed, dark)
+        // Blend cover background with the theme container so it never looks garish.
+        targetContainer = androidx.compose.ui.graphics.lerp(baseScheme.primaryContainer, pc.background, 0.85f)
+        targetOnContainer = pc.onBackground
+        targetAccent = pc.accent
+    } else {
+        targetContainer = baseScheme.primaryContainer
+        targetOnContainer = baseScheme.onPrimaryContainer
+        targetAccent = baseScheme.primary
+    }
+    val barColor by animateColorAsState(targetContainer, tween(500), label = "barColor")
+    val barOnColor by animateColorAsState(targetOnContainer, tween(500), label = "barOnColor")
+    val barAccent by animateColorAsState(targetAccent, tween(500), label = "barAccent")
+
+    val expandWithHaptic: () -> Unit = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onExpand()
+    }
+
     Surface(
-        onClick = onExpand,
+        onClick = expandWithHaptic,
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = barColor,
+        contentColor = barOnColor,
         tonalElevation = 3.dp,
         shadowElevation = 8.dp,
         modifier = modifier
@@ -179,7 +206,7 @@ fun NowPlayingBar(
                     },
                     onDragEnd = {
                         when {
-                            direction == DragDir.Vertical && accY < -verticalThresholdPx -> onExpand()
+                            direction == DragDir.Vertical && accY < -verticalThresholdPx -> expandWithHaptic()
                             direction == DragDir.Horizontal -> {
                                 val offset = offsetAnim.value
                                 if (abs(offset) >= commitThresholdPx) {
@@ -209,7 +236,7 @@ fun NowPlayingBar(
                         .clickable(
                             indication = null,
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        ) { onExpand() }
+                        ) { expandWithHaptic() }
                         .pointerInput(Unit) {
                             var accY = 0f
                             var accX = 0f
@@ -221,7 +248,7 @@ fun NowPlayingBar(
                                     accX += drag.x
                                 },
                                 onDragEnd = {
-                                    if (accY < -verticalThresholdPx && abs(accY) > abs(accX)) onExpand()
+                                    if (accY < -verticalThresholdPx && abs(accY) > abs(accX)) expandWithHaptic()
                                     accY = 0f; accX = 0f
                                 },
                                 onDragCancel = { accY = 0f; accX = 0f },
@@ -249,7 +276,7 @@ fun NowPlayingBar(
                                 alpha = glowAlpha
                             }
                             .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = glowAlpha * 0.6f),
+                                barAccent.copy(alpha = glowAlpha * 0.6f),
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                             ),
                     )
@@ -262,7 +289,7 @@ fun NowPlayingBar(
                         CircularProgressIndicator(
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = barOnColor,
                         )
                     }
                 }
@@ -278,7 +305,7 @@ fun NowPlayingBar(
                     Text(
                         episode.podcastTitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        color = barOnColor.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -292,7 +319,7 @@ fun NowPlayingBar(
                 ) {
                     Icon(
                         Icons.Rounded.SkipPrevious, "Önceki",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = barOnColor,
                     )
                 }
                 FilledIconButton(onClick = {
@@ -310,14 +337,14 @@ fun NowPlayingBar(
                 ) {
                     Icon(
                         Icons.Rounded.SkipNext, "Sonraki",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = barOnColor,
                     )
                 }
             }
             LinearProgressIndicator(
                 progress = { player.progress },
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f),
+                color = barAccent,
+                trackColor = barOnColor.copy(alpha = 0.15f),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.5.dp),
@@ -544,7 +571,16 @@ private fun FullPlayerContent(
     var showSnip by remember { mutableStateOf(false) }
     var snipExporting by remember { mutableStateOf(false) }
     var showAddToPlaylist by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (showQueueSheet) {
+        QueueBottomSheet(
+            player = player,
+            haptics = haptics,
+            onDismiss = { showQueueSheet = false },
+        )
+    }
 
     if (showAddToPlaylist) {
         AddToPlaylistDialog(
@@ -1122,8 +1158,8 @@ private fun FullPlayerContent(
             }
             DownloadButton(episode = episode)
             IconButton(onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onOpenQueue()
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                showQueueSheet = true
             }) {
                 Icon(
                     Icons.Rounded.QueueMusic,
@@ -1134,6 +1170,78 @@ private fun FullPlayerContent(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun QueueBottomSheet(
+    player: com.material.podcast.ui.viewmodel.PlayerViewModel,
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    onDismiss: () -> Unit,
+) {
+    val queueSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val upNext = player.upNext
+    val history = player.history
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = queueSheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp),
+        ) {
+            Text(
+                "Sıra Listesi",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp),
+            ) {
+                player.nowPlaying?.let { current ->
+                    item(key = "q_now_header") { QueueSubHeader("Şu an çalıyor") }
+                    item(key = "q_now_${current.guid}") {
+                        QueueRow(current, isCurrent = true) {}
+                    }
+                }
+
+                item(key = "q_up_header") { QueueSubHeader("Sıradakiler") }
+                if (upNext.isEmpty()) {
+                    item(key = "q_up_empty") {
+                        Text(
+                            "Bu bölümden sonrası yok",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    }
+                } else {
+                    items(upNext, key = { "q_up_${it.guid}" }) { ep ->
+                        QueueRow(ep, isCurrent = false) {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            player.playQueueIndex(player.queue.indexOfFirst { q -> q.guid == ep.guid })
+                        }
+                    }
+                }
+
+                if (history.isNotEmpty()) {
+                    item(key = "q_hist_header") { QueueSubHeader("Önceki dinlediklerim") }
+                    items(history, key = { "q_hist_${it.guid}" }) { ep ->
+                        QueueRow(ep, isCurrent = ep.guid == player.nowPlaying?.guid) {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            player.play(ep)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 
